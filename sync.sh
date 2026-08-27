@@ -33,6 +33,7 @@ fetch_course() {
   fetch "$course_dir/assignments.json" canvas assignments list --course-id "$course_id" --include submission
   fetch "$course_dir/quizzes.json" canvas quizzes list --course-id "$course_id"
   fetch "$course_dir/announcements.json" canvas announcements list --course-id "$course_id"
+  fetch "$course_dir/files.json" canvas files list --course-id "$course_id"
   fetch "$course_dir/modules.json" canvas modules list --course-id "$course_id" --include items,content_details
   fetch "$course_dir/front-page.json" canvas pages front --course-id "$course_id"
   fetch "$course_dir/pages.json" canvas pages list --course-id "$course_id"
@@ -57,7 +58,9 @@ fetch "$snapshot/planner.json" canvas planner items \
 jq -n \
   --arg fetched_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg instance "https://canvas.nus.edu.sg" \
-  '{schema_version: 1, fetched_at: $fetched_at, instance: $instance,
+  '{schema_version: 2, fetched_at: $fetched_at, instance: $instance,
+    expected_course_endpoints: ["assignments", "quizzes", "announcements", "files", "modules", "front-page", "pages"],
+    expected_top_level_endpoints: ["planner"],
     courses: [
       {id: 93698, code: "CS2030S"},
       {id: 94257, code: "GEA1000"},
