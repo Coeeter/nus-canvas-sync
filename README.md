@@ -16,7 +16,9 @@ Failed endpoints produce `*.error.json` files instead of silently becoming empty
 
 ## AI handoff
 
-The script guarantees collection; the AI interprets it. An agent should:
+The script guarantees collection; the AI interprets it. Before planner work, read [`AGENTS.md`](AGENTS.md) and the documents it requires under [`docs/agent-memory/`](docs/agent-memory/). Those files are the repository's durable planner memory and are maintained alongside the complete Notion Agent Instructions copy.
+
+At a high level, an agent should:
 
 1. Verify every expected file or explain its `*.error.json`.
 2. Parse announcement and page prose for deadlines, cancellations, attendance rules, preparation, and in-class activities.
@@ -24,18 +26,5 @@ The script guarantees collection; the AI interprets it. An agent should:
 4. Follow official external course links found in the homepage or pages, such as the CS2030S GitHub site.
 5. Match records by Canvas course ID, item type, and item ID before updating Notion.
 6. Preserve personal Notion fields and flag conflicts for review.
-
-For assignments, keep the three-day urgent queue focused on immediate work. Maintain a separate agent-owned `Start By` date based on the actual brief: roughly three days for short well-scoped work, seven days for substantial individual work, and at least fourteen days for group or multi-stage work. Start earlier when coordination, dependencies, or the source material require it. `Status` normally remains the only user-controlled workflow field; verified CS2030S exercise progress below is the explicit automation exception.
-
-Treat `Available From` as a hard gate on the source action. A future-dated quiz, assignment, or exercise must never be `Ready`, even when its due date is near or it appears in the current teaching week. Compare timestamps in Singapore time; for a date-only value, treat the item as available from the start of that Singapore date. Use `Locked` for the next unreleased actionable item, or `Later`/`Waiting on prerequisite` when those states better describe it. A separate preparation or setup action may become `Ready` before release only when the source supports that work and it has its own stable identity; do not make the unavailable source action `Ready` as a proxy for preparation.
-
-For CS2030S programming exercises, GitHub is the completion boundary because Canvas explicitly does not receive the submission. Reconcile an exercise as follows:
-
-- `exN-skeleton` exists: released; make the corresponding action Ready for setup.
-- `exercises-exN-<github-login>` exists with only `Initial commit`: accepted but not completed.
-- The personal repository has work after `Initial commit` and its latest commit is not `Submit`: Doing, unless the user already set a terminal Status.
-- The latest commit message is exactly `Submit`: Done/Completed.
-
-Never infer a user's completion from a staff skeleton repository, and never reopen a user-confirmed Done/Dropped item automatically.
 
 Canvas remains read-only. This script does not modify Canvas or Notion.
