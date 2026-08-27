@@ -27,6 +27,8 @@ The script guarantees collection; the AI interprets it. An agent should:
 
 For assignments, keep the three-day urgent queue focused on immediate work. Maintain a separate agent-owned `Start By` date based on the actual brief: roughly three days for short well-scoped work, seven days for substantial individual work, and at least fourteen days for group or multi-stage work. Start earlier when coordination, dependencies, or the source material require it. `Status` normally remains the only user-controlled workflow field; verified CS2030S exercise progress below is the explicit automation exception.
 
+Treat `Available From` as a hard gate on the source action. A future-dated quiz, assignment, or exercise must never be `Ready`, even when its due date is near or it appears in the current teaching week. Compare timestamps in Singapore time; for a date-only value, treat the item as available from the start of that Singapore date. Use `Locked` for the next unreleased actionable item, or `Later`/`Waiting on prerequisite` when those states better describe it. A separate preparation or setup action may become `Ready` before release only when the source supports that work and it has its own stable identity; do not make the unavailable source action `Ready` as a proxy for preparation.
+
 For CS2030S programming exercises, GitHub is the completion boundary because Canvas explicitly does not receive the submission. Reconcile an exercise as follows:
 
 - `exN-skeleton` exists: released; make the corresponding action Ready for setup.
