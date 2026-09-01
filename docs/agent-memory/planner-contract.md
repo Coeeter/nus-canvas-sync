@@ -31,6 +31,8 @@ Recompute Readiness before replanning or refreshing views:
 
 Treat `Available From` as a hard gate on the source action. If it is later than the current Asia/Singapore date and time, the action cannot be `Ready` because of a nearby due date, a `Planned` date, `Start By`, or its teaching week. A date-only value opens at the start of that Singapore date. Audit every non-terminal `Ready` action with `Available From` populated and correct future-dated violations before updating views.
 
+Also audit every non-terminal `Waiting on prerequisite` action: its named immediate prerequisite must still be unfinished and the action must still be unavailable or genuinely sequenced after it. When the prerequisite is Done or Dropped, clear `Blocked By` and recompute Readiness from current release evidence. Dependencies are agent metadata; they never justify setting the user-owned `Status` to `Waiting`.
+
 A separately identified preparation or setup action may be `Ready` before release only when official evidence supports that work. Give it a stable derived identity and do not use the unavailable source action as a proxy for preparation.
 
 ## Assignment runway

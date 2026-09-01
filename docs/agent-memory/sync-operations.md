@@ -18,6 +18,7 @@ The collector intentionally gathers deterministic source data. The agent interpr
 - On the first source absence, set `Source State` to `Missing` and `Missing Syncs` to 1. Archive only after a second consecutive confirmed absence. Restore an item if it returns.
 - Update course guidance when current official evidence changes how preparation, class activity, or submission works.
 - Recompute availability, dependencies, Readiness, unpinned planning, assignment runway, and active views before reporting success.
+- Before reporting success, explicitly verify that every `Waiting on prerequisite` record has a current unfinished immediate prerequisite, and that every non-terminal `Ready` record passes its `Available From` gate. Correct stale `Blocked By` and Readiness metadata in the same run; do not alter `Status` for either audit.
 
 ## CS2030S programming exercises
 

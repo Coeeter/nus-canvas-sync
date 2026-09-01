@@ -25,3 +25,7 @@ A future `Available From` value prevents the source action from becoming `Ready`
 ## 2026-08-27 — Repository and Notion are maintained copies
 
 Repository files make the workflow portable for local agents and version control. The Notion Agent Instructions page remains complete for agents with only Notion access. Durable rule changes update both copies in the same task; substantive conflicts pause planner writes until resolved.
+
+## 2026-09-01 — Dependency metadata must be revalidated
+
+Each sync verifies every `Waiting on prerequisite` record against the current state of its named immediate prerequisite and release evidence. A completed prerequisite clears the dependency and triggers a Readiness recomputation; dependency metadata never changes user-owned `Status`.
