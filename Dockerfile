@@ -1,7 +1,8 @@
 FROM golang:1.25.12-bookworm AS canvas-builder
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go install github.com/jjuanrivvera/canvas-cli/cmd/canvas@v1.13.0
+    go install -ldflags="-s -w -X main.Version=1.13.0" \
+    github.com/jjuanrivvera/canvas-cli/cmd/canvas@v1.13.0
 
 FROM debian:bookworm-slim AS cli-artifacts
 
