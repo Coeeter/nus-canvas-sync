@@ -46,7 +46,8 @@ A separately identified preparation or setup action may be `Ready` before releas
 ## Planning style
 
 - Plan around the timetable and existing commitments with flexible daily priorities, not rigid hour blocks.
-- Released self-paced lectures, readings, or videos are preparation actions. Plan weekly self-paced work on Sunday unless the source or Nas specifies otherwise.
+- Treat released GEA1000 and GESS1001 e-lectures as actionable self-paced coursework and bundle adjacent unwatched weeks when they form one realistic work session. Plan weekly self-paced work on Sunday unless the source or Nas specifies otherwise.
+- Treat IS1128, CS2030S, and MA1301 lectures as physical calendar events, not todos. Explicit source-assigned preparation for those classes, such as notes, videos, exercises, or problem sets, remains actionable and expires with the relevant class when appropriate.
 - Never invent an `Official Due` date to force prerequisite or personal work into a view. Use `Planned`, `Start By`, `Blocked By`, `Readiness`, and `Status` for sequencing.
 
 ## Ad hoc todos

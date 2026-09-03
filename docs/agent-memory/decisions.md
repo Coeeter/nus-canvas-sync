@@ -29,3 +29,7 @@ Repository files make the workflow portable for local agents and version control
 ## 2026-09-01 — Dependency metadata must be revalidated
 
 Each sync verifies every `Waiting on prerequisite` record against the current state of its named immediate prerequisite and release evidence. A completed prerequisite clears the dependency and triggers a Readiness recomputation; dependency metadata never changes user-owned `Status`.
+
+## 2026-09-03 — Lecture tracking follows course delivery mode
+
+Released GEA1000 and GESS1001 e-lectures are actionable coursework and contiguous unwatched weeks may be bundled. IS1128, CS2030S, and MA1301 lectures are physical calendar events rather than todos; explicit source-assigned preparation for those physical classes remains actionable.
