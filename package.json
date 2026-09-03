@@ -11,6 +11,8 @@
     "test": "bun test",
     "test:collector": "bun test tests/collector",
     "test:diff": "bun test tests/diff",
+    "test:incidents": "bun test tests/rules tests/projector",
+    "test:rules": "bun test tests/rules tests/projector",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

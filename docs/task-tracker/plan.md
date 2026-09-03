@@ -1,6 +1,6 @@
 # Automated university task tracker implementation plan
 
-Status: **Approved — Phase 1 complete, Phase 2 next**
+Status: **Approved — Phases 1–2 complete, Phase 3 next**
 
 Specification: [`spec.md`](spec.md)  
 Product context: [`../context.md`](../context.md#automated-university-task-tracker--draft)
@@ -316,18 +316,18 @@ approval unless the authority chain is amended and re-approved.
 | DIF-004 | Same as DIF-003 | Deferred to Phase 4 (as planned) |
 | DIF-005 | `src/state/lock.ts` `withRunLock` (exclusive `wx` create, scoped release), `src/state/atomic.ts` (`writeJsonAtomic`, tmp+rename) | Done |
 | DIF-006 | `src/state/manifest.ts` (`RunManifest`, `summarizeResult`), written by `writeSnapshot`; no raw data or secret values included | Done |
-| TSK-001 | Pending | Pending |
-| TSK-002 | Pending | Pending |
-| TSK-003 | Pending | Pending |
-| TSK-004 | Pending | Pending |
-| TSK-005 | Pending | Pending |
-| TSK-006 | Pending | Pending |
-| TSK-007 | Pending | Pending |
-| TSK-008 | Pending | Pending |
-| TSK-009 | Pending | Pending |
-| TSK-010 | Pending | Pending |
-| TSK-011 | Pending | Pending |
-| TSK-012 | Pending | Pending |
+| TSK-001 | `src/domain/task.ts`, `src/rules/lifecycle.ts` define the deterministic fact/projection boundary | Done |
+| TSK-002 | `projectTask` requires observed, available, unfinished work; future release is Locked | Done |
+| TSK-003 | Assessments without authoritative current action evidence remain Expected | Done |
+| TSK-004 | Authoritative completion and exact CS2030S latest `Submit` signal are deterministic | Done |
+| TSK-005 | User Done/Dropped choices are terminal and sticky | Done |
+| TSK-006 | Physical events and physical-course lectures are inactive | Done |
+| TSK-007 | Preparation expires after its event end | Done |
+| TSK-008 | Optional material is inactive by default | Done |
+| TSK-009 | `bundleContiguousLectures` emits one stable bundle retaining sorted member identities | Done |
+| TSK-010 | Conflicting evidence projects to Review | Done |
+| TSK-011 | Pure projection accepts the current instant and can rerun without source changes | Done |
+| TSK-012 | `tests/rules/lifecycle.test.ts` and `tests/projector/bundle.test.ts` cover the reported incidents | Done |
 | AI-001 | Pending | Pending |
 | AI-002 | Pending | Pending |
 | AI-003 | Pending | Pending |
