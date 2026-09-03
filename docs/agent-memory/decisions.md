@@ -33,3 +33,12 @@ Each sync verifies every `Waiting on prerequisite` record against the current st
 ## 2026-09-03 — Lecture tracking follows course delivery mode
 
 Released GEA1000 and GESS1001 e-lectures are actionable coursework and contiguous unwatched weeks may be bundled. IS1128, CS2030S, and MA1301 lectures are physical calendar events rather than todos; explicit source-assigned preparation for those physical classes remains actionable.
+
+## 2026-09-04 — Deterministic service replaces broad agent reconciliation
+
+The Bun service is the only automated Canvas/GitHub-to-Notion reconciler. It
+diffs per-course successful baselines, invokes isolated Terra Medium only for
+changed prose, validates candidate provenance, and keeps lifecycle decisions in
+code. ChatGPT and Claude remain useful for manual todos and human Review but do
+not run broad automated interpretation. Real failures retain the affected
+baseline, update sync health, and send an idempotent Resend alert.

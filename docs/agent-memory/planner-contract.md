@@ -11,11 +11,16 @@ This file defines durable planner behavior. Current Canvas, official course site
 
 ## Field ownership
 
+- The deterministic `nus-canvas-sync` service is the only automated source
+  reconciler. Codex extraction supplies source-backed candidates only; code owns
+  identity, release gates, completion, expiry, bundling, and review routing.
 - `Status` is the only user-facing workflow control. Preserve user choices unless an explicit rule below authorizes automation.
 - Preserve user-authored notes, priority, effort, and planning choices. Replan `Planned` only when `Pinned` is false. Merge source evidence into notes without erasing user text.
 - `Readiness`, `Start By`, source identity, source state, missing-sync counters, and sync timestamps are agent-maintained metadata and stay hidden from routine views.
 - `Done` and `Dropped` leave active views immediately. `Readiness` mirrors terminal `Done` as `Completed`.
-- The only automatic `Status` transition is verified CS2030S programming-exercise progress described in `sync-operations.md`.
+- Authoritative Canvas submission/grade evidence and the verified CS2030S exact
+  latest `Submit` signal may set the matching automated action to Done. No
+  interpretation may reopen a terminal user choice.
 
 ## Readiness
 
@@ -52,6 +57,8 @@ A separately identified preparation or setup action may be `Ready` before releas
 
 ## Ad hoc todos
 
+- ChatGPT, Claude, and Nas may continue adding ordinary todos conversationally.
+  A row with no Canvas identity is manual and outside automated reconciliation.
 - Fetch the Actions schema and search for an existing matching action before creating anything. Update an existing action when the request refers to work already represented.
 - For a user-created todo with no Canvas source, leave Canvas identity fields empty, use the named course, preserve the user's wording, and do not invent an `Official Due` date.
 - Use `Planned` only for an intended work date and derive `Readiness` from whether the todo is actionable now. Default a genuinely new todo to `Status: Not started` unless Nas says it is already underway or complete.

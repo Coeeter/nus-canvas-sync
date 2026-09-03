@@ -1,30 +1,40 @@
 # NUS Canvas Sync
 
-Creates a read-only Canvas snapshot for the NUS Semester 1 planner.
+A small, deterministic university task tracker for Nas. It collects normalized
+Canvas and CS2030S GitHub evidence, computes per-course semantic diffs, applies
+safe lifecycle rules, sends only changed prose to an isolated Codex process, and
+projects verified actions into the existing Notion Actions database.
 
-## Run
+It does not mirror Canvas, create attendance todos, invent release dates, or let
+AI decide availability/completion. Ambiguous evidence goes to **Review first**.
 
-Requirements: authenticated `canvas-cli`, authenticated GitHub CLI (`gh`), and `jq`.
+## Commands
 
 ```sh
-./sync.sh
+bun install
+bun run collect       # source snapshot only
+bun run sync          # complete collection -> Notion -> baseline run
+bun run check         # typecheck, lint, and all tests
 ```
 
-The script writes a timestamped snapshot under `snapshots/` and points `latest` to it. Each course includes assignments and submission state, quizzes, complete announcement bodies, the course file index, modules, the homepage, and every Canvas page. `planner.json` provides the combined calendar/planner feed. The snapshot also includes CS2030S skeleton repositories, the authenticated user's personal exercise repositories, and those personal repositories' commit histories. Other students' repositories are excluded. The manifest names the expected sources so an agent can verify coverage without hard-coding it in a prompt.
+`./sync.sh` remains the compatibility wrapper for source-only collection.
 
-Failed endpoints produce `*.error.json` files instead of silently becoming empty data. This matters because some NUS courses do not expose the Canvas quiz endpoint.
+The complete sync requires `CANVAS_URL`, `CANVAS_TOKEN`, `GH_TOKEN`,
+`NOTION_TOKEN`, `RESEND_API_KEY`, and `ALERT_EMAIL_FROM`. `ALERT_EMAIL_TO`
+defaults to `nasrullah01n@gmail.com`; `DATA_DIR` defaults to `/data` in the
+container. Secrets must be injected at runtime, preferably by the Doppler
+service token described in [deployment.md](docs/deployment.md).
 
-## AI handoff
+## Runtime behavior
 
-The script guarantees collection; the AI interprets it. Before planner work, read [`AGENTS.md`](AGENTS.md) and the documents it requires under [`docs/agent-memory/`](docs/agent-memory/). Those files are the repository's durable planner memory and are maintained alongside the complete Notion Agent Instructions copy.
+- Course baselines advance independently only after verified Notion writes.
+- A timetable/cadence can create Expected context but never an active quiz.
+- GEA1000/GESS1001 e-lectures are work; IS1128/CS2030S/MA1301 lecture attendance is not.
+- Physical labs/tutorials/recitations are not todos; real preparation expires after its event.
+- Manual Notion rows without a Canvas Item ID remain fully user-owned.
+- Real failures update the dashboard, retain failed baselines, exit nonzero, and
+  send one idempotent Resend email.
 
-At a high level, an agent should:
-
-1. Verify every expected file or explain its `*.error.json`.
-2. Parse announcement and page prose for deadlines, cancellations, attendance rules, preparation, and in-class activities.
-3. Use the file index to identify linked briefs, specifications, rubrics, and project guidance. Download only the relevant documents when their contents are needed to judge assignment scope or lead time.
-4. Follow official external course links found in the homepage or pages, such as the CS2030S GitHub site.
-5. Match records by Canvas course ID, item type, and item ID before updating Notion.
-6. Preserve personal Notion fields and flag conflicts for review.
-
-Canvas remains read-only. This script does not modify Canvas or Notion.
+See [docs/context.md](docs/context.md), the approved
+[specification](docs/task-tracker/spec.md), and the
+[deployment runbook](docs/deployment.md).

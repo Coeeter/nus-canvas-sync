@@ -26,3 +26,15 @@ Treat filters, sorts, grouping, and dependency behavior as planner logic. Preser
 ## Write boundary
 
 Ordinary planner records, course guidance, dashboard callouts, and the maintained Agent Instructions copy may be updated. Canvas and course GitHub sources remain read-only. Ask Nas before changing the Notion database structure or dashboard layout.
+
+The deterministic service matches automated rows through the existing Canvas
+identity fields, refetches before every patch, changes only agent-owned fields
+(plus Status when authoritative completion permits), and verifies the identity
+after writing. It never edits a row whose Canvas Item ID is empty; those rows
+remain manual ChatGPT/Claude/Nas tasks with all user fields preserved.
+
+Ambiguous candidates use `Needs Review = true` and `Readiness = Review`, appear
+first on the dashboard, and stay out of active views. Nas accepts by correcting
+facts and clearing Needs Review or rejects by setting Status to Dropped. The
+service revalidates an accepted candidate and returns unresolved conflicts to
+Review instead of guessing.

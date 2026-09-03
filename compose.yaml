@@ -1,0 +1,14 @@
+services:
+  nus-canvas-sync:
+    image: ${IMAGE:-ghcr.io/coeeter/nus-canvas-sync:latest}
+    environment:
+      DOPPLER_TOKEN: ${DOPPLER_TOKEN:-}
+      TZ: Asia/Singapore
+    volumes:
+      - nus-sync-data:/data
+      - nus-sync-codex:/codex-home
+    restart: "no"
+
+volumes:
+  nus-sync-data:
+  nus-sync-codex:

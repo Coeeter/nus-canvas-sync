@@ -2,16 +2,23 @@
 
 ## Collection and coverage
 
-1. Run `./sync.sh` from the repository root.
+1. Run `bun run sync` for the complete deterministic workflow. Use `./sync.sh`
+   only for source-only diagnostics.
 2. Treat `latest/manifest.json` as the mandatory source manifest. Account for every expected course and top-level endpoint.
 3. Inspect every `*.error.json`. A failed Canvas or GitHub endpoint is a coverage gap, never an empty result.
 4. Read full announcement and page bodies, module content details, the course file index, and relevant briefs, specifications, rubrics, or official external course pages before interpreting work.
 5. Use narrow, read-only live Canvas or GitHub calls only to retry a recorded failure, inspect an API gap, download a specifically relevant document, or resolve evidence ambiguity.
 
-The collector intentionally gathers deterministic source data. The agent interprets prose, resolves conflicts, and reconciles Notion.
+The collector gathers deterministic source data. The service sends only one
+course's changed prose and referenced changed documents to isolated Terra Medium
+extraction. Codex returns candidates and never writes Notion. Deterministic code
+validates provenance, resolves safe lifecycle state, and sends uncertainty to
+Review first.
 
 ## Reconciliation
 
+- Do not run the retired broad all-course agent workflow. Scheduled and manual
+  automated reconciliation uses the same container command and outer run lock.
 - Match imported actions idempotently by `Canvas Course ID` + `Canvas Item Type` + `Canvas Item ID`.
 - Preserve personal fields according to `planner-contract.md`.
 - Separate release dates from due dates and preserve `During class` semantics.
@@ -32,4 +39,10 @@ Read `latest/github/cs2030s-repos.json` and the matching file under `latest/gith
 
 ## Completion report
 
-Update the dashboard's last-success callout and preserve the view invariants in `notion.md`. Report only changed facts, overdue work, ambiguity, failures, or something requiring Nas's response. If nothing changed and no failure remains, complete quietly.
+The service updates the dashboard health callout with every course outcome. A
+real remaining failure begins `LAST SYNC FAILED`, retains only the failed
+course's baseline, sends one idempotent Resend email, and exits nonzero. Declared
+404/capability gaps with working alternates remain manifest metadata, not alerts.
+Report only changed facts, overdue work, ambiguity, failures, or something
+requiring Nas's response. If nothing changed and no failure remains, complete
+quietly.

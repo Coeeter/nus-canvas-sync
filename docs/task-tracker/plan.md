@@ -1,6 +1,6 @@
 # Automated university task tracker implementation plan
 
-Status: **Approved — Phases 1–4 complete, Phase 5 next**
+Status: **Approved — Phases 1–5 implemented; release/deployment validation next**
 
 Specification: [`spec.md`](spec.md)  
 Product context: [`../context.md`](../context.md#automated-university-task-tracker--draft)
@@ -342,22 +342,22 @@ approval unless the authority chain is amended and re-approved.
 | NOT-005 | Review-first dashboard order was applied in the completed cleanup gate | Done (live operation) |
 | NOT-006 | Review projections set `Needs Review` and `Readiness = Review`; live views exclude them | Done |
 | NOT-007 | `healthSummary` plus health-callout discovery/update reports every course and leads failures with `LAST SYNC FAILED` | Done |
-| NOT-008 | Pending | Pending |
+| NOT-008 | All four repository memory files and the fetched/verified Notion Agent Instructions page describe the deterministic service and manual-task boundary | Done |
 | ERR-001 | Transient collection retries once; Notion/Resend use bounded status-aware retries; Codex uses two attempts | Done |
 | ERR-002 | Declared capability gaps remain non-alerting while failed collection/pipeline/health stages alert | Done |
 | ERR-003 | Resend alert includes run time, courses/stages, prior baseline time, detail, and dashboard link | Done |
 | ERR-004 | `ResendAlertClient` uses `nus-sync-<runId>` as the stable idempotency key | Done |
 | ERR-005 | Alert failure is persisted in the manifest and returns an unsuccessful result without recursion | Done |
 | OPS-001 | `package.json` scripts (`collect`, `typecheck`, `test`, `test:collector`, `test:diff`, `fixture:replay`, `check`); Bun + TypeScript 7 project under `src/` | Done |
-| OPS-002 | Pending | Pending |
-| OPS-003 | Pending | Pending |
-| OPS-004 | Pending | Pending |
+| OPS-002 | `Dockerfile` pins Bun, Canvas CLI, Codex CLI, GitHub CLI, Doppler CLI and document extraction without credentials | Done (definition and tests; registry timeout blocked local image completion) |
+| OPS-003 | `/codex-home` is a dedicated external volume and `docs/deployment.md` documents password-equivalent auth initialization | Done |
+| OPS-004 | Image has no cron; Dokploy schedule is documented as `0 7,12,17,22 * * *` in Asia/Singapore | Done |
 | OPS-005 | `bun run sync` is the one manual/scheduled command and owns an outer run lock | Done |
 | OPS-006 | Sync emits one concise JSON outcome and suppresses raw source/model/Notion payloads | Done |
-| OPS-007 | Pending | Pending |
-| MIG-001 | Pending | Pending |
-| MIG-002 | Pending | Pending |
-| MIG-003 | Pending | Pending |
+| OPS-007 | `compose.yaml` and `docs/deployment.md` define volumes, Doppler, auth, first run, schedule, verification, and rollback | Done |
+| MIG-001 | Targeted cleanup completed and verified before implementation | Done (live operation) |
+| MIG-002 | Review first was moved above active queues and verified | Done (live operation) |
+| MIG-003 | Legacy automation was paused and retained | Done (live operation) |
 | MIG-004 | Pending | Pending |
 | MIG-005 | Pending | Pending |
 
@@ -372,6 +372,9 @@ approval unless the authority chain is amended and re-approved.
   the filesystem, and Biome for lint/format instead of ESLint/Prettier. Later
   phases (Notion client, Codex invocation, orchestration, alerts) should
   follow the same conventions for consistency.
+- Nas subsequently authorized CI push and an attempted production Dokploy
+  handoff, superseding the original local-only release boundary. Those release
+  steps follow the five planned phase commits.
 
 ### Blockers
 
@@ -380,4 +383,6 @@ approval unless the authority chain is amended and re-approved.
 
 ### Next action
 
-Continue with Phase 5 (container packaging, deployment documentation, and durable policy reconciliation).
+Add the GHCR workflow, push the committed phases, validate the CI-built image,
+then attempt Doppler/Dokploy configuration. Seed baselines only after the manual
+production run is safe.
