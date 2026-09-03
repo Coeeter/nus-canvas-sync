@@ -30,6 +30,12 @@ export interface CourseManifestEntry {
   endpoints: Record<string, EndpointOutcomeSummary>;
   diff: { added: number; changed: number; removed: number };
   outcome: "success" | "failed";
+  stages?: {
+    ai: "skipped" | "success" | "failed";
+    notion: "skipped" | "success" | "failed";
+    baseline: "retained" | "advanced";
+    detail?: string;
+  };
 }
 
 export interface RunManifest {
@@ -39,4 +45,5 @@ export interface RunManifest {
   courses: Array<CourseManifestEntry>;
   planner: EndpointOutcomeSummary;
   github: Record<string, EndpointOutcomeSummary>;
+  alert?: { status: "skipped" | "success" | "failed"; detail?: string };
 }

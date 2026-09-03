@@ -42,7 +42,12 @@ export function planReconciliation(
         : ({
             type: "create",
             identity: projection.id,
-            properties: { ...properties, Action: projection.title, Status: "Not started" },
+            properties: {
+              ...properties,
+              Action: projection.title,
+              Status: projection.state === "done" ? "Done" : "Not started",
+              ...(projection.needsReview && projection.reason ? { Notes: projection.reason } : {}),
+            },
           } as const),
     ];
   });
@@ -75,6 +80,7 @@ function projectionProperties(projection: TaskProjection, syncedAt: string) {
           : "Assignment"
         : "Preparation",
     "Work Mode": projection.kind === "e-lecture" ? "Online" : "Flexible",
+    ...(projection.state === "done" ? { Status: "Done" } : {}),
   };
 }
 

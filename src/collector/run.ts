@@ -41,6 +41,10 @@ export function collect(dataDir: string, now: Date = new Date()) {
   return withRunLock(dataDir, runCollection(dataDir, now));
 }
 
+export function collectUnlocked(dataDir: string, now: Date = new Date()) {
+  return runCollection(dataDir, now);
+}
+
 interface CourseOutcome {
   course: Course;
   normalized: Array<NormalizedRecord>;

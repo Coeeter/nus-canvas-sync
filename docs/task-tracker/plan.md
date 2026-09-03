@@ -1,6 +1,6 @@
 # Automated university task tracker implementation plan
 
-Status: **Approved — Phases 1–3 complete, Phase 4 next**
+Status: **Approved — Phases 1–4 complete, Phase 5 next**
 
 Specification: [`spec.md`](spec.md)  
 Product context: [`../context.md`](../context.md#automated-university-task-tracker--draft)
@@ -312,8 +312,8 @@ approval unless the authority chain is amended and re-approved.
 | SRC-008 | No write/mutating Canvas or GitHub CLI command anywhere in `src/collector/` | Done |
 | DIF-001 | `src/state/snapshot-store.ts` (timestamped snapshot + `latest` symlink), `src/state/baseline-store.ts` (per-course baseline file) | Done |
 | DIF-002 | `src/diff/compute.ts` `computeDiff` compares by id + content hash only; `tests/diff/compute.test.ts` proves reordering/unchanged records produce no diff | Done (diff production; AI consumption is Phase 3) |
-| DIF-003 | Not yet implemented — baseline advancement gated on downstream (Notion) success belongs to Phase 4's orchestrator | Deferred to Phase 4 (as planned) |
-| DIF-004 | Same as DIF-003 | Deferred to Phase 4 (as planned) |
+| DIF-003 | `runSync` advances a baseline only after interpretation and verified Notion operations | Done |
+| DIF-004 | Course pipeline failures are isolated; successful course baselines still advance | Done |
 | DIF-005 | `src/state/lock.ts` `withRunLock` (exclusive `wx` create, scoped release), `src/state/atomic.ts` (`writeJsonAtomic`, tmp+rename) | Done |
 | DIF-006 | `src/state/manifest.ts` (`RunManifest`, `summarizeResult`), written by `writeSnapshot`; no raw data or secret values included | Done |
 | TSK-001 | `src/domain/task.ts`, `src/rules/lifecycle.ts` define the deterministic fact/projection boundary | Done |
@@ -341,19 +341,19 @@ approval unless the authority chain is amended and re-approved.
 | NOT-004 | Rows without `Canvas Item ID` are manual and never receive an operation | Done |
 | NOT-005 | Review-first dashboard order was applied in the completed cleanup gate | Done (live operation) |
 | NOT-006 | Review projections set `Needs Review` and `Readiness = Review`; live views exclude them | Done |
-| NOT-007 | Pending | Pending |
+| NOT-007 | `healthSummary` plus health-callout discovery/update reports every course and leads failures with `LAST SYNC FAILED` | Done |
 | NOT-008 | Pending | Pending |
-| ERR-001 | Pending | Pending |
-| ERR-002 | Pending | Pending |
-| ERR-003 | Pending | Pending |
-| ERR-004 | Pending | Pending |
-| ERR-005 | Pending | Pending |
+| ERR-001 | Transient collection retries once; Notion/Resend use bounded status-aware retries; Codex uses two attempts | Done |
+| ERR-002 | Declared capability gaps remain non-alerting while failed collection/pipeline/health stages alert | Done |
+| ERR-003 | Resend alert includes run time, courses/stages, prior baseline time, detail, and dashboard link | Done |
+| ERR-004 | `ResendAlertClient` uses `nus-sync-<runId>` as the stable idempotency key | Done |
+| ERR-005 | Alert failure is persisted in the manifest and returns an unsuccessful result without recursion | Done |
 | OPS-001 | `package.json` scripts (`collect`, `typecheck`, `test`, `test:collector`, `test:diff`, `fixture:replay`, `check`); Bun + TypeScript 7 project under `src/` | Done |
 | OPS-002 | Pending | Pending |
 | OPS-003 | Pending | Pending |
 | OPS-004 | Pending | Pending |
-| OPS-005 | Pending | Pending |
-| OPS-006 | Pending | Pending |
+| OPS-005 | `bun run sync` is the one manual/scheduled command and owns an outer run lock | Done |
+| OPS-006 | Sync emits one concise JSON outcome and suppresses raw source/model/Notion payloads | Done |
 | OPS-007 | Pending | Pending |
 | MIG-001 | Pending | Pending |
 | MIG-002 | Pending | Pending |
@@ -363,9 +363,8 @@ approval unless the authority chain is amended and re-approved.
 
 ### Deviations
 
-- Pre-execution Notion cleanup/pause gate (MIG-001–003): Nas is handling this
-  separately outside this session; not performed or verified here. Phases 2–5
-  code work does not depend on it, so execution continued without it.
+- Pre-execution Notion cleanup, Review-first dashboard update, and legacy
+  automation pause were completed and verified before implementation.
 - Implementation stack (not specified by the plan's touchpoints, decided with
   Nas during Phase 1): TypeScript 7 (`tsgo`), the `effect` library (services
   via `Effect.Service`, `Schema.TaggedError` failure taxonomy, `Effect.gen`)
@@ -381,4 +380,4 @@ approval unless the authority chain is amended and re-approved.
 
 ### Next action
 
-Continue with Phase 2 (deterministic task lifecycle).
+Continue with Phase 5 (container packaging, deployment documentation, and durable policy reconciliation).

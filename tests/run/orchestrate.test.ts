@@ -1,0 +1,88 @@
+import { expect, test } from "bun:test";
+import { mkdir, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { CollectionResult } from "../../src/collector/run";
+import { COURSES, type CourseCode } from "../../src/config/courses";
+import type { NormalizedRecord } from "../../src/normalize/types";
+import { runSync } from "../../src/run/orchestrate";
+
+test("one course failure retains only its baseline and sends one alert", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "nus-sync-run-"));
+  const snapshotDir = join(dataDir, "snapshots", "run");
+  await mkdir(snapshotDir, { recursive: true });
+  const changed = {
+    id: `course:${COURSES.find((course) => course.code === "IS1128")!.id}:announcement:1`,
+    courseCode: "IS1128",
+    kind: "announcement",
+    sourceUrl: null,
+    contentHash: "hash",
+    fields: { message: "changed" },
+  } satisfies NormalizedRecord;
+  const records = Object.fromEntries(
+    COURSES.map((course) => [course.code, course.code === "IS1128" ? [changed] : []]),
+  );
+  const diffs = Object.fromEntries(
+    COURSES.map((course) => [
+      course.code,
+      { added: course.code === "IS1128" ? [changed] : [], changed: [], removed: [] },
+    ]),
+  );
+  const collection = {
+    runId: "run",
+    snapshotDir,
+    records,
+    diffs,
+    manifest: {
+      runId: "run",
+      startedAt: "2026-09-03T04:00:00Z",
+      finishedAt: "2026-09-03T04:00:00Z",
+      planner: { status: "ok" },
+      github: {},
+      courses: COURSES.map((course) => ({
+        courseCode: course.code,
+        endpoints: {},
+        diff: { added: 0, changed: 0, removed: 0 },
+        outcome: "success" as const,
+      })),
+    },
+  } as CollectionResult;
+  let alerts = 0;
+  const result = await runSync({
+    collect: () => Promise.resolve(collection),
+    notion: {
+      listExistingActions: () => Promise.resolve([]),
+      applyAndVerify: () => Promise.reject(new Error("unexpected write")),
+      updateHealthBlock: () => Promise.resolve(),
+    },
+    interpret: (input) =>
+      input.courseCode === "IS1128"
+        ? Promise.reject(new Error("invalid twice"))
+        : Promise.resolve({ candidates: [] }),
+    alert: {
+      send: () => {
+        alerts += 1;
+        return Promise.resolve();
+      },
+    },
+    healthBlockId: "health",
+    dashboardUrl: "https://notion.example",
+    dataDir,
+    now: new Date("2026-09-03T04:00:00Z"),
+  });
+  expect(result.ok).toBe(false);
+  expect(alerts).toBe(1);
+  expect(result.health).toContain("IS1128 failed");
+  const advanced = await Promise.all(
+    COURSES.map(
+      async (course) =>
+        [
+          course.code,
+          await Bun.file(join(dataDir, "baselines", `${course.code}.json`)).exists(),
+        ] as const,
+    ),
+  );
+  expect(advanced.filter(([, exists]) => exists).map(([code]) => code)).toEqual(
+    COURSES.map((course) => course.code).filter((code): code is CourseCode => code !== "IS1128"),
+  );
+});

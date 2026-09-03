@@ -8,14 +8,17 @@
     "fixture:replay": "bun run src/cli/fixture-replay.ts",
     "format": "biome format --write .",
     "lint": "biome check .",
+    "sync": "bun run src/cli/sync.ts",
     "test": "bun test",
     "test:ai": "bun test tests/ai",
+    "test:alerts": "bun test tests/alerts",
     "test:collector": "bun test tests/collector",
     "test:diff": "bun test tests/diff",
     "test:incidents": "bun test tests/rules tests/projector",
     "test:notion": "bun test tests/notion tests/reconcile",
     "test:reconcile": "bun test tests/reconcile",
     "test:rules": "bun test tests/rules tests/projector",
+    "test:run": "bun test tests/run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
