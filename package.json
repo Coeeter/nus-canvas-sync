@@ -9,9 +9,12 @@
     "format": "biome format --write .",
     "lint": "biome check .",
     "test": "bun test",
+    "test:ai": "bun test tests/ai",
     "test:collector": "bun test tests/collector",
     "test:diff": "bun test tests/diff",
     "test:incidents": "bun test tests/rules tests/projector",
+    "test:notion": "bun test tests/notion tests/reconcile",
+    "test:reconcile": "bun test tests/reconcile",
     "test:rules": "bun test tests/rules tests/projector",
     "typecheck": "tsc --noEmit"
   },

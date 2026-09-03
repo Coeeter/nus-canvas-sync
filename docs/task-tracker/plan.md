@@ -1,6 +1,6 @@
 # Automated university task tracker implementation plan
 
-Status: **Approved — Phases 1–2 complete, Phase 3 next**
+Status: **Approved — Phases 1–3 complete, Phase 4 next**
 
 Specification: [`spec.md`](spec.md)  
 Product context: [`../context.md`](../context.md#automated-university-task-tracker--draft)
@@ -328,19 +328,19 @@ approval unless the authority chain is amended and re-approved.
 | TSK-010 | Conflicting evidence projects to Review | Done |
 | TSK-011 | Pure projection accepts the current instant and can rerun without source changes | Done |
 | TSK-012 | `tests/rules/lifecycle.test.ts` and `tests/projector/bundle.test.ts` cover the reported incidents | Done |
-| AI-001 | Pending | Pending |
-| AI-002 | Pending | Pending |
-| AI-003 | Pending | Pending |
-| AI-004 | Pending | Pending |
-| AI-005 | Pending | Pending |
-| AI-006 | Pending | Pending |
-| AI-007 | Pending | Pending |
-| NOT-001 | Pending | Pending |
-| NOT-002 | Pending | Pending |
-| NOT-003 | Pending | Pending |
-| NOT-004 | Pending | Pending |
-| NOT-005 | Pending | Pending |
-| NOT-006 | Pending | Pending |
+| AI-001 | `src/ai/input.ts` builds one-course inputs from changed records, referenced documents, and supplied course context | Done |
+| AI-002 | `CodexCliExecutor` pins `gpt-5.6-terra` and medium reasoning | Done |
+| AI-003 | Codex runs ephemeral/read-only in a temporary directory with an allowlisted environment and ignored ambient rules/config | Done |
+| AI-004 | JSON schema plus `validateCandidates` requires evidence and rejects unknown provenance | Done |
+| AI-005 | `interpretCourse` performs exactly two attempts and cleans its temporary workspace | Done |
+| AI-006 | `candidateToFact` sends ambiguous or low-confidence output through deterministic Review projection | Done |
+| AI-007 | `resolveReviewedCandidate` preserves rejection and revalidates unsafe acceptance | Done |
+| NOT-001 | `NotionClient` targets the configured existing data source; no database/frontend creation | Done |
+| NOT-002 | Stable Canvas identity matching and logical-property comparison avoid duplicate/unchanged writes | Done |
+| NOT-003 | Reconciliation updates only the live schema's agent-owned fields and verifies identity after every write | Done |
+| NOT-004 | Rows without `Canvas Item ID` are manual and never receive an operation | Done |
+| NOT-005 | Review-first dashboard order was applied in the completed cleanup gate | Done (live operation) |
+| NOT-006 | Review projections set `Needs Review` and `Readiness = Review`; live views exclude them | Done |
 | NOT-007 | Pending | Pending |
 | NOT-008 | Pending | Pending |
 | ERR-001 | Pending | Pending |
