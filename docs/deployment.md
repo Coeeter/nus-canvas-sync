@@ -1,6 +1,8 @@
 # Dokploy deployment
 
-The production artifact is `ghcr.io/coeeter/nus-canvas-sync:latest`. The image
+The production artifact is `ghcr.io/coeeter/nus-canvas-sync:latest`, published
+by `.github/workflows/container.yml` after the full test suite. Deploy the
+immutable `sha-<7 characters>` tag for rollback-safe releases. The image
 contains Bun 1.4.0, Canvas CLI 1.13.0, Codex CLI 0.150.1, GitHub CLI 2.98.0,
 Doppler CLI 3.76.1, and `pdftotext`. It contains no credentials and runs as UID
 10001. It has no cron daemon.
