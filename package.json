@@ -1,0 +1,27 @@
+{
+  "name": "nus-canvas-sync",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun run typecheck && bun run lint && bun test",
+    "collect": "bun run src/cli/collect.ts",
+    "fixture:replay": "bun run src/cli/fixture-replay.ts",
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "test": "bun test",
+    "test:collector": "bun test tests/collector",
+    "test:diff": "bun test tests/diff",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform": "^0.96.2",
+    "@effect/platform-bun": "^0.90.0",
+    "effect": "^3.21.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.10",
+    "@effect/language-service": "latest",
+    "@types/bun": "latest",
+    "typescript": "^7.0.2"
+  }
+}
