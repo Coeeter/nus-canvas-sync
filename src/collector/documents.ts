@@ -1,7 +1,9 @@
 import { FileSystem, Path } from "@effect/platform";
 import { Effect } from "effect";
 import type { CanvasFile } from "../../schemas/canvas.schema";
-import { TaskAffectingFailureError } from "../errors";
+import { TaskAffectingFailureError, type TransientFailureError } from "../errors";
+import { sanitizeSourceText } from "../normalize/sanitize";
+import type { NormalizedRecord } from "../normalize/types";
 import { runProcess } from "./process";
 
 const RECOGNISABLE_FILENAME = /\b(brief|spec(ification)?|rubric|handout)\b/i;
@@ -24,6 +26,19 @@ export function selectRelevantFiles(
   });
 }
 
+export function referencedByForFile(
+  file: CanvasFile,
+  records: ReadonlyArray<NormalizedRecord>,
+): Array<string> {
+  return records
+    .filter((record) => {
+      const value = JSON.stringify(record.fields);
+      return value.includes(`/files/${file.id}`) || value.includes(sanitizeSourceText(file.url));
+    })
+    .map((record) => record.id)
+    .sort();
+}
+
 /** Downloads one selected file and extracts text when the format is supported (plain text now; PDF via `pdftotext` when present). */
 export function downloadAndExtract(file: CanvasFile, destDir: string) {
   return Effect.gen(function* () {
@@ -41,12 +56,26 @@ export function downloadAndExtract(file: CanvasFile, destDir: string) {
     });
 
     yield* fs.makeDirectory(destDir, { recursive: true });
-    const destPath = pathService.join(destDir, `${file.id}-${file.display_name}`);
+    const safeName = file.display_name.replace(/[\\/]/g, "_");
+    const destPath = pathService.join(destDir, `${file.id}-${safeName}`);
     yield* fs.writeFile(destPath, bytes);
 
-    const text = yield* extractText(destPath, file.display_name);
-    return { destPath, text };
-  });
+    return yield* extractText(destPath, file.display_name).pipe(
+      Effect.map((text) => ({ text })),
+      Effect.ensuring(fs.remove(destPath, { force: true }).pipe(Effect.ignore)),
+    );
+  }).pipe(
+    Effect.mapError((error) => {
+      const tag =
+        typeof error === "object" && error !== null && "_tag" in error ? error._tag : undefined;
+      if (tag === "TaskAffectingFailureError") return error as TaskAffectingFailureError;
+      if (tag === "TransientFailureError") return error as TransientFailureError;
+      return new TaskAffectingFailureError({
+        command: `extract document ${file.id}`,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }),
+  );
 }
 
 function extractText(path: string, displayName: string) {
@@ -58,9 +87,22 @@ function extractText(path: string, displayName: string) {
     if (/\.pdf$/i.test(displayName)) {
       const result = yield* runProcess("pdftotext", [path, "-"], {
         PATH: process.env.PATH ?? "",
-      }).pipe(Effect.orElseSucceed(() => null));
-      return result && result.exitCode === 0 ? result.stdout : null;
+      });
+      if (result.exitCode !== 0) {
+        return yield* Effect.fail(
+          new TaskAffectingFailureError({
+            command: "pdftotext",
+            message: result.stderr.slice(0, 500),
+          }),
+        );
+      }
+      return result.stdout;
     }
-    return null;
+    return yield* Effect.fail(
+      new TaskAffectingFailureError({
+        command: "extract document",
+        message: `unsupported document format: ${displayName}`,
+      }),
+    );
   });
 }

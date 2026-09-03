@@ -43,6 +43,17 @@ export class CanvasClient extends Effect.Service<CanvasClient>()("CanvasClient",
         });
       });
 
+    const callRequired = <A, I>(args: ReadonlyArray<string>, schema: Schema.Schema<A, I>) =>
+      Effect.gen(function* () {
+        const fullArgs = [...args, "--no-cache", "--quiet", "-o", "json"];
+        const result = yield* runProcess("canvas", fullArgs, env);
+        return yield* decodeRequired({
+          command: `canvas ${fullArgs.join(" ")}`,
+          result,
+          schema,
+        });
+      });
+
     const courseArgs = (id: number) => String(id);
 
     const assignments = (course: Course) =>
@@ -109,12 +120,7 @@ export class CanvasClient extends Effect.Service<CanvasClient>()("CanvasClient",
       );
 
     const pageBody = (course: Course, url: string) =>
-      call(
-        course,
-        "pages",
-        ["pages", "get", "--course-id", courseArgs(course.id), url],
-        pageBodySchema,
-      );
+      callRequired(["pages", "get", "--course-id", courseArgs(course.id), url], pageBodySchema);
 
     const plannerItems = (
       courses: ReadonlyArray<Course>,

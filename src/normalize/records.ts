@@ -11,6 +11,7 @@ import type { GithubCommit, GithubRepo } from "../../schemas/github.schema";
 import type { Course } from "../config/courses";
 import { normalizeDate } from "./dates";
 import { contentHash } from "./hash";
+import { sanitizeSourceText, sanitizeSourceValue } from "./sanitize";
 import { type NormalizedRecord, sourceId } from "./types";
 
 function record(
@@ -20,13 +21,14 @@ function record(
   sourceUrl: string | null,
   fields: Record<string, unknown>,
 ) {
+  const safeFields = sanitizeSourceValue(fields) as Record<string, unknown>;
   return {
     id: sourceId(course.id, kind, id),
     courseCode: course.code,
     kind,
-    sourceUrl,
-    contentHash: contentHash(fields),
-    fields,
+    sourceUrl: sourceUrl === null ? null : sanitizeSourceText(sourceUrl),
+    contentHash: contentHash(safeFields),
+    fields: safeFields,
   };
 }
 
@@ -40,6 +42,7 @@ export function normalizeAssignment(course: Course, raw: CanvasAssignment) {
     lockedForUser: raw.locked_for_user,
     submissionTypes: raw.submission_types,
     pointsPossible: raw.points_possible,
+    description: raw.description ?? null,
     submission: raw.submission
       ? {
           workflowState: raw.submission.workflow_state,
@@ -62,6 +65,7 @@ export function normalizeQuiz(course: Course, raw: CanvasQuiz) {
     published: raw.published,
     lockedForUser: raw.locked_for_user,
     quizType: raw.quiz_type,
+    description: raw.description ?? null,
   });
 }
 
@@ -81,28 +85,48 @@ export function normalizeFile(course: Course, raw: CanvasFile) {
 }
 
 export function normalizeModule(course: Course, raw: CanvasModule) {
-  return record(course, "module", raw.id, null, {
-    name: raw.name,
-    items: (raw.items ?? []).map((item) => ({
-      id: item.id,
-      title: item.title,
-      type: item.type ?? null,
-      contentId: item.content_id ?? null,
-      dueAt: normalizeDate(item.content_details?.due_at),
-      unlockAt: normalizeDate(item.content_details?.unlock_at),
-      lockAt: normalizeDate(item.content_details?.lock_at),
-      pointsPossible: item.content_details?.points_possible ?? null,
-    })),
-  });
+  return record(
+    course,
+    "module",
+    raw.id,
+    `https://canvas.nus.edu.sg/courses/${course.id}/modules#module_${raw.id}`,
+    {
+      name: raw.name,
+      published: raw.published ?? null,
+      unlockAt: normalizeDate(raw.unlock_at),
+      state: raw.state ?? null,
+      items: (raw.items ?? []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        type: item.type ?? null,
+        contentId: item.content_id ?? null,
+        htmlUrl: item.html_url ?? null,
+        pageUrl: item.page_url ?? null,
+        externalUrl: item.external_url ?? null,
+        published: item.published ?? null,
+        lockedForUser: item.content_details?.locked_for_user ?? null,
+        dueAt: normalizeDate(item.content_details?.due_at),
+        unlockAt: normalizeDate(item.content_details?.unlock_at),
+        lockAt: normalizeDate(item.content_details?.lock_at),
+        pointsPossible: item.content_details?.points_possible ?? null,
+      })),
+    },
+  );
 }
 
 export function normalizePage(course: Course, raw: CanvasPageBody) {
-  return record(course, "page", raw.url, null, {
-    title: raw.title,
-    body: raw.body,
-    updatedAt: normalizeDate(raw.updated_at),
-    published: raw.published,
-  });
+  return record(
+    course,
+    "page",
+    raw.url,
+    `https://canvas.nus.edu.sg/courses/${course.id}/pages/${raw.url}`,
+    {
+      title: raw.title,
+      body: raw.body,
+      updatedAt: normalizeDate(raw.updated_at),
+      published: raw.published,
+    },
+  );
 }
 
 export function normalizePlannerItem(course: Course, raw: CanvasPlannerItem) {
@@ -129,9 +153,16 @@ export function normalizeGithubRepo(course: Course, raw: GithubRepo) {
   });
 }
 
-export function normalizeDocument(course: Course, file: CanvasFile, text: string | null) {
+export function normalizeDocument(
+  course: Course,
+  file: CanvasFile,
+  text: string | null,
+  referencedBy: ReadonlyArray<string> = [],
+) {
   return record(course, "document", file.id, file.url, {
+    fileSourceId: sourceId(course.id, "file", file.id),
     displayName: file.display_name,
+    referencedBy: [...referencedBy].sort(),
     text,
   });
 }

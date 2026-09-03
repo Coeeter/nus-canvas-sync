@@ -29,6 +29,7 @@ export const assignmentSchema = Schema.Struct({
   locked_for_user: Schema.Boolean,
   submission_types: Schema.Array(Schema.String),
   points_possible: Schema.NullOr(Schema.Number),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
   submission: Schema.optional(Schema.NullOr(submissionSchema)),
 });
 export const assignmentListSchema = Schema.Array(assignmentSchema);
@@ -44,6 +45,7 @@ export const quizSchema = Schema.Struct({
   published: Schema.Boolean,
   locked_for_user: Schema.Boolean,
   quiz_type: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export const quizListSchema = Schema.Array(quizSchema);
 export type CanvasQuiz = typeof quizSchema.Type;
@@ -73,18 +75,25 @@ export const moduleItemSchema = Schema.Struct({
   type: Schema.optional(Schema.String),
   content_id: Schema.optional(Schema.Number),
   html_url: Schema.optional(Schema.String),
+  page_url: Schema.optional(Schema.String),
+  external_url: Schema.optional(Schema.String),
+  published: Schema.optional(Schema.Boolean),
   content_details: Schema.optional(
     Schema.Struct({
       due_at: Schema.optional(nullableDate),
       unlock_at: Schema.optional(nullableDate),
       lock_at: Schema.optional(nullableDate),
       points_possible: Schema.optional(Schema.NullOr(Schema.Number)),
+      locked_for_user: Schema.optional(Schema.Boolean),
     }),
   ),
 });
 export const moduleSchema = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
+  published: Schema.optional(Schema.Boolean),
+  unlock_at: Schema.optional(nullableDate),
+  state: Schema.optional(Schema.String),
   items: Schema.optional(Schema.NullOr(Schema.Array(moduleItemSchema))),
 });
 export const moduleListSchema = Schema.Array(moduleSchema);

@@ -44,6 +44,23 @@ describe("decodeEndpoint", () => {
     if (Either.isLeft(result)) expect(result.left._tag).toBe("CapabilityGapError");
   });
 
+  test("a declared course capability gap accepts its observed authorization failure", async () => {
+    const result = await Effect.runPromise(
+      Effect.either(
+        decodeEndpoint({
+          course: "GESS1001",
+          endpoint: "files",
+          command: "canvas files list",
+          result: failResult("403 user not authorised to perform that action"),
+          schema,
+        }),
+      ),
+    );
+
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) expect(result.left._tag).toBe("CapabilityGapError");
+  });
+
   test("an undeclared 404 is task-affecting, never silently treated as a gap", async () => {
     const result = await Effect.runPromise(
       Effect.either(

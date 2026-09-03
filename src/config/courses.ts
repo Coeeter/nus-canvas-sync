@@ -31,16 +31,36 @@ export type CourseEndpoint = (typeof COURSE_ENDPOINTS)[number];
  */
 export interface CourseCapabilities {
   gaps: Partial<Record<CourseEndpoint, ReadonlyArray<CourseEndpoint>>>;
+  acceptedFailures?: Partial<Record<CourseEndpoint, ReadonlyArray<"not-found" | "auth">>>;
 }
 
 const NO_KNOWN_GAPS: CourseCapabilities = { gaps: {} };
 
 export const COURSE_CAPABILITIES: Record<CourseCode, CourseCapabilities> = {
   CS2030S: NO_KNOWN_GAPS,
-  GEA1000: NO_KNOWN_GAPS,
-  GESS1001: NO_KNOWN_GAPS,
+  GEA1000: {
+    gaps: { pages: ["modules"] },
+    acceptedFailures: { pages: ["not-found"] },
+  },
+  GESS1001: {
+    gaps: {
+      files: ["modules", "announcements"],
+      frontPage: ["modules", "announcements"],
+      pages: ["modules"],
+      quizzes: ["assignments", "modules", "announcements"],
+    },
+    acceptedFailures: {
+      files: ["auth"],
+      frontPage: ["not-found"],
+      pages: ["not-found"],
+      quizzes: ["not-found"],
+    },
+  },
   IS1128: NO_KNOWN_GAPS,
-  MA1301: NO_KNOWN_GAPS,
+  MA1301: {
+    gaps: { quizzes: ["assignments", "modules"] },
+    acceptedFailures: { quizzes: ["not-found"] },
+  },
 };
 
 export function isRequiredEndpoint(
@@ -57,4 +77,15 @@ export function acceptedAlternates(
   capabilities: Record<CourseCode, CourseCapabilities> = COURSE_CAPABILITIES,
 ) {
   return capabilities[course].gaps[endpoint] ?? [];
+}
+
+export function acceptsGapFailure(
+  course: CourseCode,
+  endpoint: CourseEndpoint,
+  failure: "not-found" | "auth",
+  capabilities: Record<CourseCode, CourseCapabilities> = COURSE_CAPABILITIES,
+) {
+  const configured = capabilities[course].acceptedFailures?.[endpoint];
+  if (configured) return configured.includes(failure);
+  return failure === "not-found" && endpoint in capabilities[course].gaps;
 }

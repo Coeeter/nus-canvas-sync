@@ -3,7 +3,7 @@ import type { CanvasFile, CanvasPlannerItem } from "../../schemas/canvas.schema"
 import type { GithubCommit, GithubRepo } from "../../schemas/github.schema";
 import { COURSES, type Course, type CourseCode } from "../config/courses";
 import { computeDiff } from "../diff/compute";
-import type { SemanticDiff } from "../diff/types";
+import { EMPTY_DIFF, type SemanticDiff } from "../diff/types";
 import { type CourseEndpointResults, normalizeCourseRecords } from "../normalize/course";
 import {
   normalizeDocument,
@@ -17,7 +17,8 @@ import { withRunLock } from "../state/lock";
 import { type CourseManifestEntry, type RunManifest, summarizeResult } from "../state/manifest";
 import { writeSnapshot } from "../state/snapshot-store";
 import { CanvasClient } from "./canvas";
-import { downloadAndExtract, selectRelevantFiles } from "./documents";
+import { courseCoverageSucceeded } from "./coverage";
+import { downloadAndExtract, referencedByForFile, selectRelevantFiles } from "./documents";
 import { filterRelevantRepos, GithubClient } from "./github";
 import type { EndpointResult } from "./types";
 
@@ -33,6 +34,8 @@ export interface CollectionResult {
 const PLANNER_WINDOW = { startDate: "2026-07-19", endDate: "2027-01-10" };
 const PAGE_FETCH_CONCURRENCY = 4;
 const COMMIT_FETCH_CONCURRENCY = 4;
+const COURSE_FETCH_CONCURRENCY = 2;
+const ENDPOINT_FETCH_CONCURRENCY = 4;
 
 export function collect(dataDir: string, now: Date = new Date()) {
   return withRunLock(dataDir, runCollection(dataDir, now));
@@ -51,10 +54,7 @@ function runCollection(dataDir: string, now: Date) {
     const github = yield* GithubClient;
 
     const startedAt = now.toISOString();
-    const runId = now
-      .toISOString()
-      .replace(/[-:]/g, "")
-      .replace(/\.\d+Z$/, "Z");
+    const runId = now.toISOString().replace(/[-:]/g, "").replace(".", "");
 
     const viewerLoginResult = yield* Effect.either(github.viewerLogin);
     const reposResult = yield* Effect.either(github.repositories);
@@ -83,6 +83,10 @@ function runCollection(dataDir: string, now: Date) {
 
     const plannerResult = yield* Effect.either(canvas.plannerItems(COURSES, PLANNER_WINDOW));
     const plannerByCourse = groupPlannerByCourse(plannerResult);
+    const githubHealthy =
+      Either.isRight(viewerLoginResult) &&
+      Either.isRight(reposResult) &&
+      commitResults.every(([, result]) => Either.isRight(result));
 
     const courseOutcomes = yield* Effect.all(
       COURSES.map((course) =>
@@ -92,9 +96,11 @@ function runCollection(dataDir: string, now: Date) {
           plannerRecords: plannerByCourse.get(course.id) ?? [],
           githubRepos: course.code === "CS2030S" ? relevantRepos : [],
           githubCommits: course.code === "CS2030S" ? commitResults : [],
+          upstreamHealthy:
+            Either.isRight(plannerResult) && (course.code !== "CS2030S" || githubHealthy),
         }),
       ),
-      { concurrency: "unbounded" },
+      { concurrency: COURSE_FETCH_CONCURRENCY },
     );
 
     const records: Partial<Record<CourseCode, Array<NormalizedRecord>>> = {};
@@ -148,11 +154,12 @@ interface CollectCourseDeps {
   plannerRecords: Array<NormalizedRecord>;
   githubRepos: ReadonlyArray<GithubRepo>;
   githubCommits: ReadonlyArray<readonly [string, EndpointResult<ReadonlyArray<GithubCommit>>]>;
+  upstreamHealthy: boolean;
 }
 
 function collectCourse(course: Course, deps: CollectCourseDeps) {
   return Effect.gen(function* () {
-    const { canvas, dataDir, plannerRecords, githubRepos, githubCommits } = deps;
+    const { canvas, dataDir, plannerRecords, githubRepos, githubCommits, upstreamHealthy } = deps;
 
     const [assignments, quizzes, announcements, files, modules, frontPage, pagesIndex] =
       yield* Effect.all(
@@ -165,7 +172,7 @@ function collectCourse(course: Course, deps: CollectCourseDeps) {
           Effect.either(canvas.frontPage(course)),
           Effect.either(canvas.pagesIndex(course)),
         ],
-        { concurrency: "unbounded" },
+        { concurrency: ENDPOINT_FETCH_CONCURRENCY },
       );
 
     const pageUrls = Either.isRight(pagesIndex) ? pagesIndex.right.map((page) => page.url) : [];
@@ -184,22 +191,32 @@ function collectCourse(course: Course, deps: CollectCourseDeps) {
       pageBodies,
     };
 
-    const courseRecords = normalizeCourseRecords(course, endpoints);
-    const documentRecords = yield* collectDocuments(course, dataDir, files, courseRecords);
-
-    const normalized = [...courseRecords, ...documentRecords, ...plannerRecords];
-    normalized.push(...githubRepos.map((repo) => normalizeGithubRepo(course, repo)));
+    const sourceRecords = [...normalizeCourseRecords(course, endpoints), ...plannerRecords];
+    sourceRecords.push(...githubRepos.map((repo) => normalizeGithubRepo(course, repo)));
     for (const [repoName, result] of githubCommits) {
       if (Either.isRight(result)) {
-        normalized.push(
+        sourceRecords.push(
           ...result.right.map((commit) => normalizeGithubCommit(course, repoName, commit)),
         );
       }
     }
 
     const baseline = yield* readBaseline(dataDir, course.code);
-    const diff = computeDiff(baseline, normalized);
-
+    const baselineSources = baseline.filter((record) => record.kind !== "document");
+    const sourceDiff = computeDiff(baselineSources, sourceRecords);
+    const changedRecords = [
+      ...sourceDiff.added,
+      ...sourceDiff.changed.map((change) => change.after),
+    ];
+    const documents = yield* collectDocuments(
+      course,
+      dataDir,
+      files,
+      sourceRecords,
+      changedRecords,
+      baseline,
+    );
+    const normalized = [...sourceRecords, ...documents.records];
     const endpointSummaries = {
       assignments: summarizeResult(assignments),
       quizzes: summarizeResult(quizzes),
@@ -208,11 +225,14 @@ function collectCourse(course: Course, deps: CollectCourseDeps) {
       modules: summarizeResult(modules),
       frontPage: summarizeResult(frontPage),
       pages: summarizeResult(pagesIndex),
-      documents: { status: "ok", count: documentRecords.length } as const,
+      ...Object.fromEntries(
+        pageUrls.map((url, index) => [`page:${url}`, summarizeResult(pageBodies[index]!)]),
+      ),
+      documents: { status: "ok", count: documents.records.length } as const,
+      ...documents.outcomes,
     };
-    const failed = Object.values(endpointSummaries).some(
-      (e) => e.status === "TaskAffectingFailureError",
-    );
+    const failed = !upstreamHealthy || !courseCoverageSucceeded(course.code, endpointSummaries);
+    const diff = failed ? EMPTY_DIFF : computeDiff(baseline, normalized);
 
     const entry: CourseManifestEntry = {
       courseCode: course.code,
@@ -241,29 +261,61 @@ function collectDocuments(
   dataDir: string,
   filesResult: EndpointResult<ReadonlyArray<CanvasFile>>,
   courseRecords: ReadonlyArray<NormalizedRecord>,
+  changedRecords: ReadonlyArray<NormalizedRecord>,
+  baseline: ReadonlyArray<NormalizedRecord>,
 ) {
   return Effect.gen(function* () {
-    if (Either.isLeft(filesResult)) return [];
+    if (Either.isLeft(filesResult)) return { records: [], outcomes: {} };
 
-    const proseBlobs = courseRecords.flatMap((r) =>
-      Object.values(r.fields).filter((v): v is string => typeof v === "string"),
+    const referencedFromChanges = new Set(
+      filesResult.right
+        .filter((file) => referencedByForFile(file, changedRecords).length > 0)
+        .map((file) => file.id),
     );
-    const selected = selectRelevantFiles(filesResult.right, proseBlobs);
-    if (selected.length === 0) return [];
+    const baselineDocuments = new Map(
+      baseline.filter((record) => record.kind === "document").map((record) => [record.id, record]),
+    );
+    const changedIds = new Set(changedRecords.map((record) => record.id));
+    const selected = filesResult.right.filter((file) => {
+      const references = referencedByForFile(file, courseRecords);
+      return references.length > 0 || selectRelevantFiles([file], []).length === 1;
+    });
+    if (selected.length === 0) return { records: [], outcomes: {} };
 
     const destDir = `${dataDir}/documents/${course.code}`;
     const downloaded = yield* Effect.all(
-      selected.map((file) => Effect.either(downloadAndExtract(file, destDir))),
+      selected.map((file) => {
+        const documentId = `course:${course.id}:document:${file.id}`;
+        const cached = baselineDocuments.get(documentId);
+        const fileChanged = changedIds.has(`course:${course.id}:file:${file.id}`);
+        const extraction =
+          cached && !fileChanged && !referencedFromChanges.has(file.id)
+            ? Effect.succeed({
+                text: (cached.fields.text as string | null | undefined) ?? null,
+              })
+            : downloadAndExtract(file, destDir);
+        return Effect.either(extraction);
+      }),
       { concurrency: 4 },
     );
 
     const documentRecords: Array<NormalizedRecord> = [];
+    const outcomes: Record<string, ReturnType<typeof summarizeResult>> = {};
     for (const [index, result] of downloaded.entries()) {
+      const file = selected[index];
+      if (!file) continue;
+      outcomes[`document:${file.id}`] = summarizeResult(result);
       if (Either.isRight(result)) {
-        const file = selected[index];
-        if (file) documentRecords.push(normalizeDocument(course, file, result.right.text));
+        documentRecords.push(
+          normalizeDocument(
+            course,
+            file,
+            result.right.text,
+            referencedByForFile(file, courseRecords),
+          ),
+        );
       }
     }
-    return documentRecords;
+    return { records: documentRecords, outcomes };
   });
 }

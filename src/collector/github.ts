@@ -1,4 +1,4 @@
-import { Effect, Redacted } from "effect";
+import { Effect, Redacted, Schema } from "effect";
 import {
   githubCommitListSchema,
   githubRepoListSchema,
@@ -9,7 +9,7 @@ import { decodeRequired } from "./outcome";
 import { runProcess } from "./process";
 
 const CS2030S_ORG = "nus-cs2030s-2627-s1";
-const COMMIT_FETCH_CONCURRENCY = 4;
+const githubCommitPagesSchema = Schema.Array(githubCommitListSchema);
 
 export class GithubClient extends Effect.Service<GithubClient>()("GithubClient", {
   accessors: true,
@@ -56,13 +56,16 @@ export class GithubClient extends Effect.Service<GithubClient>()("GithubClient",
           `repos/${CS2030S_ORG}/${repoName}/commits`,
           "-f",
           "per_page=100",
+          "--paginate",
+          "--slurp",
         ];
         const result = yield* runProcess("gh", args, env);
-        return yield* decodeRequired({
+        const pages = yield* decodeRequired({
           command: `gh ${args.join(" ")}`,
           result,
-          schema: githubCommitListSchema,
+          schema: githubCommitPagesSchema,
         });
+        return pages.flat();
       });
 
     const relevantExerciseRepos = (login: string, repoNames: ReadonlyArray<string>) =>
@@ -73,7 +76,6 @@ export class GithubClient extends Effect.Service<GithubClient>()("GithubClient",
       repositories,
       commits,
       relevantExerciseRepos,
-      commitConcurrency: COMMIT_FETCH_CONCURRENCY,
     };
   }),
 }) {}
@@ -82,7 +84,10 @@ export function filterRelevantRepos<T extends { name: string }>(
   repos: ReadonlyArray<T>,
   login: string,
 ) {
+  const escapedLogin = login.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return repos.filter(
-    (repo) => /^ex\d+-skeleton$/.test(repo.name) || repo.name.endsWith(`-${login}`),
+    (repo) =>
+      /^ex\d+-skeleton$/.test(repo.name) ||
+      new RegExp(`^exercises-ex\\d+-${escapedLogin}$`, "i").test(repo.name),
   );
 }

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { CanvasFile } from "../../schemas/canvas.schema";
-import { selectRelevantFiles } from "../../src/collector/documents";
+import { referencedByForFile, selectRelevantFiles } from "../../src/collector/documents";
+import { COURSES } from "../../src/config/courses";
+import { normalizeDocument } from "../../src/normalize/records";
+import type { NormalizedRecord } from "../../src/normalize/types";
+
+const course = COURSES.find((candidate) => candidate.code === "IS1128")!;
 
 function file(id: number, display_name: string): CanvasFile {
   return {
@@ -28,5 +33,21 @@ describe("selectRelevantFiles", () => {
     const files = [file(1, "meme.jpg")];
     const selected = selectRelevantFiles(files, ["totally unrelated announcement text"]);
     expect(selected).toEqual([]);
+  });
+
+  test("preserves stable source relationships on normalized documents", () => {
+    const source = {
+      id: `course:${course.id}:announcement:9`,
+      courseCode: course.code,
+      kind: "announcement",
+      sourceUrl: null,
+      contentHash: "hash",
+      fields: { message: "See /files/1/download" },
+    } satisfies NormalizedRecord;
+    const references = referencedByForFile(file(1, "brief.pdf"), [source]);
+    const document = normalizeDocument(course, file(1, "brief.pdf"), "requirements", references);
+
+    expect(document.fields.fileSourceId).toBe(`course:${course.id}:file:1`);
+    expect(document.fields.referencedBy).toEqual([source.id]);
   });
 });

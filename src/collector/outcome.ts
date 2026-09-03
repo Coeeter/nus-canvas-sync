@@ -1,6 +1,7 @@
 import { Effect, ParseResult, Schema } from "effect";
 import {
   acceptedAlternates,
+  acceptsGapFailure,
   COURSE_CAPABILITIES,
   type CourseCapabilities,
   type CourseCode,
@@ -73,13 +74,17 @@ export function decodeEndpoint<A, I>(params: {
 
   const failureClass = classifyFailure(result.stderr);
 
-  if (failureClass === "not-found" && !isRequiredEndpoint(course, endpoint, capabilities)) {
+  if (
+    (failureClass === "not-found" || failureClass === "auth") &&
+    !isRequiredEndpoint(course, endpoint, capabilities) &&
+    acceptsGapFailure(course, endpoint, failureClass, capabilities)
+  ) {
     const alternates = acceptedAlternates(course, endpoint, capabilities);
     return Effect.fail(
       new CapabilityGapError({
         course,
         endpoint,
-        reason: `declared gap; accepted alternates: ${alternates.join(", ")}`,
+        reason: `declared ${failureClass} gap; accepted alternates: ${alternates.join(", ")}`,
       }),
     );
   }
