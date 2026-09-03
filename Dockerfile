@@ -1,4 +1,4 @@
-FROM golang:1.25.2-bookworm AS canvas-builder
+FROM golang:1.25.12-bookworm AS canvas-builder
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go install github.com/jjuanrivvera/canvas-cli/cmd/canvas@v1.13.0
