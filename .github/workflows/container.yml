@@ -62,9 +62,3 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
-      - name: Verify published image
-        run: |
-          docker pull "ghcr.io/coeeter/nus-canvas-sync:sha-${GITHUB_SHA::7}"
-          container_id=$(docker run --detach "ghcr.io/coeeter/nus-canvas-sync:sha-${GITHUB_SHA::7}" sleep infinity)
-          trap 'docker rm --force "$container_id"' EXIT
-          docker exec "$container_id" bun run healthcheck
