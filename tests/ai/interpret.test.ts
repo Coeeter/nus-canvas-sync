@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { writeFile } from "node:fs/promises";
 import type { CodexExecutor } from "../../src/ai/interpret";
-import { interpretCourse } from "../../src/ai/interpret";
+import { buildCodexArgs, interpretCourse, sanitizeStderr } from "../../src/ai/interpret";
 import type { NormalizedRecord } from "../../src/normalize/types";
 
 const record = {
@@ -12,6 +12,27 @@ const record = {
   contentHash: "x",
   fields: { message: "Quiz" },
 } satisfies NormalizedRecord;
+
+test("keeps large prompts out of Codex argv", () => {
+  const prompt = "x".repeat(200_000);
+  const args = buildCodexArgs("/tmp/schema.json", "/tmp/output.json", "/tmp/work");
+
+  expect(args).not.toContain(prompt);
+  expect(args.at(-1)).toBe("-");
+});
+
+test("redacts credentials and bounds Codex stderr", () => {
+  const stderr =
+    "Bearer secret-token https://example.test/a?token=canvas-secret&verifier=canvas-verifier " +
+    "x".repeat(1_000);
+  const sanitized = sanitizeStderr(stderr, 100);
+
+  expect(sanitized).not.toContain("secret-token");
+  expect(sanitized).not.toContain("canvas-secret");
+  expect(sanitized).not.toContain("canvas-verifier");
+  expect(sanitized).toContain("Bearer [REDACTED]");
+  expect(sanitized.endsWith("... [truncated]")).toBe(true);
+});
 
 test("does not invoke Codex when there is no semantic change", async () => {
   let calls = 0;
