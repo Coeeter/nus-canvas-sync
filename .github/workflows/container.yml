@@ -65,4 +65,6 @@ jobs:
       - name: Verify published image
         run: |
           docker pull "ghcr.io/coeeter/nus-canvas-sync:sha-${GITHUB_SHA::7}"
-          docker run --rm --entrypoint bun "ghcr.io/coeeter/nus-canvas-sync:sha-${GITHUB_SHA::7}" run healthcheck
+          container_id=$(docker run --detach "ghcr.io/coeeter/nus-canvas-sync:sha-${GITHUB_SHA::7}" sleep infinity)
+          trap 'docker rm --force "$container_id"' EXIT
+          docker exec "$container_id" bun run healthcheck

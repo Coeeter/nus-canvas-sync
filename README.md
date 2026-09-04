@@ -23,7 +23,7 @@ The complete sync requires `CANVAS_URL`, `CANVAS_TOKEN`, `GH_TOKEN`,
 `NOTION_TOKEN`, `RESEND_API_KEY`, and `ALERT_EMAIL_FROM`. `ALERT_EMAIL_TO`
 defaults to `nasrullah01n@gmail.com`; `DATA_DIR` defaults to `/data` in the
 container. Secrets must be injected at runtime, preferably by the Doppler
-service token described in [deployment.md](docs/deployment.md).
+vault provider described in [deployment.md](docs/deployment.md).
 
 ## Runtime behavior
 

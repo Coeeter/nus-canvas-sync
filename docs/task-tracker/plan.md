@@ -229,8 +229,7 @@ operator and agent documentation agrees with the replacement workflow.
 
 Touchpoints:
 
-- `Dockerfile`, `.dockerignore`, `compose.yaml`
-- `scripts/container-entrypoint.sh` or equivalent supported entrypoint
+- `Dockerfile`, `.dockerignore`
 - `README.md`, `docs/deployment.md`
 - `docs/agent-memory/planner-contract.md`
 - `docs/agent-memory/sync-operations.md`
@@ -244,7 +243,7 @@ Concrete changes:
   CLI artifacts and only required document-extraction/runtime packages.
 - Define persistent data and `CODEX_HOME` mounts, secret/config inputs, a
   non-privileged application user where compatible with mounted auth, and a
-  no-cron container process suitable for Dokploy Compose/Application Jobs.
+  no-cron image suitable for a direct-image Dokploy Application.
 - Document one-time VPS Codex-auth initialization without copying auth into the
   image or repository.
 - Document the exact Dokploy timezone and schedule: `0 7,12,17,22 * * *` in
@@ -265,7 +264,6 @@ Commands:
 - `bun run test:container`
 - `docker image inspect nus-canvas-sync:plan-verify`
 - `docker run --rm nus-canvas-sync:plan-verify bun run healthcheck`
-- `docker compose config`
 
 Commit: `build: package task tracker for Dokploy`
 
@@ -275,7 +273,7 @@ Commit: `build: package task tracker for Dokploy`
 - Run the complete incident fixture suite and confirm all TSK-012 cases.
 - Build the Linux amd64 image from a clean checkout context.
 - Scan image history/config and fixture manifests for secret-shaped values.
-- Start the Compose service with fake/local boundaries and execute the same
+- Start the Dokploy Application container with fake/local boundaries and execute the same
   command Dokploy will schedule.
 - Confirm a no-diff run invokes zero Codex calls.
 - Confirm a failed IS1128 interpretation advances four course baselines, retains
@@ -349,12 +347,12 @@ approval unless the authority chain is amended and re-approved.
 | ERR-004 | `ResendAlertClient` uses `nus-sync-<runId>` as the stable idempotency key | Done |
 | ERR-005 | Alert failure is persisted in the manifest and returns an unsuccessful result without recursion | Done |
 | OPS-001 | `package.json` scripts (`collect`, `typecheck`, `test`, `test:collector`, `test:diff`, `fixture:replay`, `check`); Bun + TypeScript 7 project under `src/` | Done |
-| OPS-002 | `Dockerfile` pins Bun, Canvas CLI, Codex CLI, GitHub CLI, Doppler CLI and document extraction without credentials | Done (definition and tests; registry timeout blocked local image completion) |
+| OPS-002 | `Dockerfile` pins Bun, Canvas CLI, Codex CLI, GitHub CLI and document extraction without credentials | Done (definition and tests; registry timeout blocked local image completion) |
 | OPS-003 | `/codex-home` is a dedicated external volume and `docs/deployment.md` documents password-equivalent auth initialization | Done |
 | OPS-004 | Image has no cron; Dokploy schedule is documented as `0 7,12,17,22 * * *` in Asia/Singapore | Done |
 | OPS-005 | `bun run sync` is the one manual/scheduled command and owns an outer run lock | Done |
 | OPS-006 | Sync emits one concise JSON outcome and suppresses raw source/model/Notion payloads | Done |
-| OPS-007 | `compose.yaml` and `docs/deployment.md` define volumes, Doppler, auth, first run, schedule, verification, and rollback | Done |
+| OPS-007 | `docs/deployment.md` defines the direct-image Dokploy Application, volumes, vault injection, auth, first run, schedule, verification, and rollback | Done |
 | MIG-001 | Targeted cleanup completed and verified before implementation | Done (live operation) |
 | MIG-002 | Review first was moved above active queues and verified | Done (live operation) |
 | MIG-003 | Legacy automation was paused and retained | Done (live operation) |

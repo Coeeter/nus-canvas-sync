@@ -4,8 +4,8 @@ The production artifact is `ghcr.io/coeeter/nus-canvas-sync:latest`, published
 by `.github/workflows/container.yml` after the full test suite. Deploy the
 immutable `sha-<7 characters>` tag for rollback-safe releases. The image
 contains Bun 1.4.0, Canvas CLI 1.13.0, Codex CLI 0.150.1, GitHub CLI 2.98.0,
-Doppler CLI 3.76.1, and `pdftotext`. It contains no credentials and runs as UID
-10001. It has no cron daemon.
+and `pdftotext`. It contains no credentials and runs as UID 10001. It has no
+cron daemon.
 
 ## Persistent volumes
 
@@ -16,9 +16,11 @@ Mount:
   `auth.json` as password-equivalent.
 
 Initialize Codex authentication once on the VPS without copying it into Git or
-an image. Copy the already authenticated VPS Codex home into the dedicated
-volume using a temporary root-owned container, then make the volume contents
-UID/GID 10001. Do not print or inspect `auth.json`. Validate only with
+an image. After Dokploy creates `nus-sync-codex`, use a temporary root-owned
+container to copy the already authenticated VPS `auth.json` into that volume,
+then make the copied file UID/GID 10001 with mode `0600`. Resolve and verify the
+exact Docker volume name first; never use a partial match. Do not print or
+inspect `auth.json`. Validate from the running Application only with
 `codex --version` and a harmless authenticated non-interactive invocation.
 
 ## Doppler configuration
@@ -36,7 +38,7 @@ Create project `nus-sync` and configuration `prod`. Set these runtime values:
 
 Create one read-only Doppler service token for `nus-sync/prod` and configure it
 as a Dokploy Doppler vault provider named `nus-sync-prod`, scoped to the
-**personal** project. Reference the remote values from the Compose environment;
+**personal** project. Reference the remote values from the Application environment;
 Dokploy resolves them at deployment time without storing their values:
 
 ```text
@@ -51,16 +53,21 @@ ALERT_EMAIL_TO=${{vault.nus-sync-prod.ALERT_EMAIL_TO}}
 ```
 
 Add the optional Notion overrides the same way when present. Never paste secret
-values into logs, build arguments, Compose files, Dokploy environment text, or
-chat.
+values into logs, build arguments, source files, Dokploy environment text, or chat.
 
 ## Dokploy application and schedule
 
-Create a Compose/application job under the **personal** project using
-`compose.yaml` or the GHCR image directly. Attach both persistent volumes, set
-the Dokploy vault references above, and pin `IMAGE` to the verified immutable
-`sha-<7 characters>` tag. The scheduled command is the image default
-(`bun run sync`).
+Create a Dokploy **Application** under the **personal** project with the Docker
+provider. Select the existing private GHCR registry credential and set the image
+to the verified immutable
+`ghcr.io/coeeter/nus-canvas-sync:sha-<7 characters>` tag. Set the Application
+command to `sleep infinity`, add the vault-backed environment above, and mount
+the `nus-sync-data` volume at `/data` and the `nus-sync-codex` volume at
+`/codex-home`.
+
+Dokploy Application jobs use `docker exec`, so the idle Application container
+must remain running. Configure one Application schedule whose command is
+`bun run sync`; do not add Compose or an in-image cron daemon.
 
 Configure Dokploy in `Asia/Singapore` with exactly:
 

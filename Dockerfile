@@ -10,8 +10,6 @@ ARG CODEX_VERSION=0.150.1
 ARG CODEX_SHA256=ab308870bc7fc048c23dc49d03f6b8af9ce7fc99b9da882d6688be7a90155c7a
 ARG GH_VERSION=2.98.0
 ARG GH_SHA256=3b8ac6b30336802fc1a858d7c084e11cdf24ac1a761ca90b68022d7d729208de
-ARG DOPPLER_VERSION=3.76.1
-ARG DOPPLER_SHA256=e35230bd21fdbd7e41ddcb24672ec61cecefdb22de244d0216ea6b59853f63f2
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
@@ -24,10 +22,7 @@ RUN apt-get update \
     && echo "${GH_SHA256}  /tmp/gh.tar.gz" | sha256sum -c - \
     && tar -xzf /tmp/gh.tar.gz -C /tmp \
     && mv "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh \
-    && curl -fsSLo /tmp/doppler.tar.gz "https://github.com/DopplerHQ/cli/releases/download/${DOPPLER_VERSION}/doppler_${DOPPLER_VERSION}_linux_amd64.tar.gz" \
-    && echo "${DOPPLER_SHA256}  /tmp/doppler.tar.gz" | sha256sum -c - \
-    && tar -xzf /tmp/doppler.tar.gz -C /usr/local/bin doppler \
-    && chmod 0755 /usr/local/bin/codex /usr/local/bin/gh /usr/local/bin/doppler
+    && chmod 0755 /usr/local/bin/codex /usr/local/bin/gh
 
 FROM oven/bun:1.4.0-debian
 
@@ -40,7 +35,6 @@ RUN apt-get update \
 COPY --from=canvas-builder /go/bin/canvas /usr/local/bin/canvas
 COPY --from=cli-artifacts /usr/local/bin/codex /usr/local/bin/codex
 COPY --from=cli-artifacts /usr/local/bin/gh /usr/local/bin/gh
-COPY --from=cli-artifacts /usr/local/bin/doppler /usr/local/bin/doppler
 
 WORKDIR /app
 COPY package.json bun.lock ./
@@ -48,8 +42,7 @@ RUN bun install --frozen-lockfile --production
 COPY --chown=nus-sync:nus-sync . .
 
 RUN mkdir -p /data /codex-home \
-    && chown -R nus-sync:nus-sync /app /data /codex-home \
-    && chmod 0755 /app/scripts/container-entrypoint.sh
+    && chown -R nus-sync:nus-sync /app /data /codex-home
 
 ENV DATA_DIR=/data \
     CODEX_HOME=/codex-home \
@@ -58,5 +51,5 @@ ENV DATA_DIR=/data \
 
 USER nus-sync
 VOLUME ["/data", "/codex-home"]
-ENTRYPOINT ["/app/scripts/container-entrypoint.sh"]
+CMD ["bun", "run", "sync"]
 HEALTHCHECK --interval=1m --timeout=10s --start-period=10s --retries=3 CMD ["bun", "run", "healthcheck"]

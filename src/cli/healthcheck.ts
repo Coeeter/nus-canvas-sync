@@ -4,7 +4,6 @@ const expected = [
   ["canvas", ["--version"], "canvas-cli version 1.13.0"],
   ["codex", ["--version"], "codex-cli 0.150.1"],
   ["gh", ["--version"], "gh version 2.98.0"],
-  ["doppler", ["--version"], "v3.76.1"],
 ] as const;
 
 for (const [binary, args, version] of expected) {
