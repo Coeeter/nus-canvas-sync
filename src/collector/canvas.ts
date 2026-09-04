@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Redacted, type Schema } from "effect";
+import { Config, Context, Effect, Layer, Redacted, type Schema } from "effect";
 import {
   announcementListSchema,
   assignmentListSchema,
@@ -17,10 +17,13 @@ import { runProcess } from "./process";
 export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient", {
   make: Effect.gen(function* () {
     const config = yield* AppConfig;
+    const home = yield* Config.string("HOME");
+    const path = yield* Config.string("PATH").pipe(Config.withDefault(""));
     const env = {
       CANVAS_URL: config.canvasUrl,
       CANVAS_TOKEN: Redacted.value(config.canvasToken),
-      PATH: process.env.PATH ?? "",
+      HOME: home,
+      PATH: path,
     };
 
     const call = Effect.fn("CanvasClient.call")(function* <A>(
