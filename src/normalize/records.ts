@@ -42,6 +42,8 @@ export function normalizeAssignment(course: Course, raw: CanvasAssignment) {
     lockedForUser: raw.locked_for_user,
     submissionTypes: raw.submission_types,
     pointsPossible: raw.points_possible,
+    quizId: raw.quiz_id ?? null,
+    isQuizAssignment: raw.is_quiz_assignment ?? false,
     description: raw.description ?? null,
     submission: raw.submission
       ? {

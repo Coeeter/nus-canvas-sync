@@ -29,6 +29,8 @@ export const assignmentSchema = Schema.Struct({
   locked_for_user: Schema.Boolean,
   submission_types: Schema.Array(Schema.String),
   points_possible: Schema.NullOr(Schema.Number),
+  quiz_id: Schema.optional(Schema.NullOr(Schema.Number)),
+  is_quiz_assignment: Schema.optional(Schema.Boolean),
   description: Schema.optional(Schema.NullOr(Schema.String)),
   submission: Schema.optional(Schema.NullOr(submissionSchema)),
 });

@@ -4,10 +4,12 @@ import type { TaskProjection } from "../domain/task";
 export function bundleContiguousLectures(
   tasks: ReadonlyArray<TaskProjection>,
 ): Array<TaskProjection> {
-  const passthrough = tasks.filter((task) => task.kind !== "e-lecture" || task.week === undefined);
+  const passthrough = tasks.filter(
+    (task) => task.kind !== "e-lecture" || task.week === undefined || task.state !== "ready",
+  );
   const lectures = tasks.filter(
     (task): task is TaskProjection & { week: number } =>
-      task.kind === "e-lecture" && task.week !== undefined,
+      task.kind === "e-lecture" && task.week !== undefined && task.state === "ready",
   );
 
   for (const courseCode of new Set(lectures.map((task) => task.courseCode))) {

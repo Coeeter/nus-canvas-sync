@@ -4,6 +4,8 @@ export type TaskKind = "assessment" | "preparation" | "e-lecture" | "physical-ev
 export type TaskState =
   | "expected"
   | "locked"
+  | "waiting"
+  | "scheduled"
   | "ready"
   | "done"
   | "expired"
@@ -24,6 +26,9 @@ export interface TaskFact {
   dueAt?: string | null;
   eventEndsAt?: string | null;
   completed?: boolean;
+  scheduled?: boolean;
+  workMode?: "Flexible" | "Before class" | "During class" | "Online";
+  blockedBy?: string | null;
   userStatus?: UserStatus;
   conflict?: { reason: string; sources: ReadonlyArray<string> };
   week?: number;

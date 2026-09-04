@@ -23,3 +23,27 @@ test("contiguous GEA1000 e-lectures form one stable work-session bundle", () => 
   expect(bundle?.memberSourceIds).toEqual(["module:1", "module:2", "module:3"]);
   expect(bundle?.actionable).toBe(true);
 });
+
+test("terminal lecture choices split actionable bundles", () => {
+  const tasks = [1, 2, 3].map((week) =>
+    projectTask(
+      {
+        id: `week-${week}`,
+        courseCode: "GEA1000",
+        kind: "e-lecture",
+        title: `Week ${week}`,
+        sourceIds: [`module:${week}`],
+        observed: true,
+        ...(week === 2 ? { userStatus: "Dropped" as const } : {}),
+        week,
+      } satisfies TaskFact,
+      new Date("2026-09-03T12:00:00+08:00"),
+    ),
+  );
+
+  const bundled = bundleContiguousLectures(tasks);
+  expect(bundled.filter((task) => task.state === "ready").map((task) => task.title)).toEqual([
+    "Week 1",
+    "Week 3",
+  ]);
+});

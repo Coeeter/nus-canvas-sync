@@ -38,6 +38,13 @@ describe("deterministic lifecycle", () => {
       "inactive",
     );
   });
+  test("an in-class assessment is scheduled context rather than ready work", () => {
+    expect(projectTask(fact({ scheduled: true, workMode: "During class" }), now)).toMatchObject({
+      state: "scheduled",
+      actionable: false,
+      workMode: "During class",
+    });
+  });
   test("past preparation expires and optional diagnostics remain inactive", () => {
     expect(
       projectTask(fact({ kind: "preparation", eventEndsAt: "2026-09-02T15:00:00+08:00" }), now)

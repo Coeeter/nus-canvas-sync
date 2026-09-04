@@ -12,6 +12,7 @@ export const AGENT_OWNED_FIELDS = [
   "Official Due",
   "Source URL",
   "Last Synced",
+  "Blocked By",
 ] as const;
 
 export interface ExistingAction {
@@ -29,12 +30,17 @@ export function planReconciliation(
   projections: ReadonlyArray<TaskProjection>,
   syncedAt: string,
 ): Array<ReconcileOperation> {
-  const automated = new Map(
-    existing.filter((row) => row.automatedIdentity).map((row) => [row.automatedIdentity!, row]),
-  );
+  const claimedPageIds = new Set<string>();
   return projections.flatMap((projection) => {
     const properties = projectionProperties(projection, syncedAt);
-    const current = automated.get(projection.id);
+    const current = findExistingAction(
+      existing,
+      projection.id,
+      projection.sourceIds,
+      projection.title,
+      claimedPageIds,
+    );
+    if (current) claimedPageIds.add(current.id);
     if (current && propertiesEqual(current.properties, properties)) return [];
     return [
       current
@@ -51,6 +57,79 @@ export function planReconciliation(
           } as const),
     ];
   });
+}
+
+export function findExistingAction(
+  existing: ReadonlyArray<ExistingAction>,
+  identity: string,
+  sourceIds: ReadonlyArray<string>,
+  title?: string,
+  excludedPageIds: ReadonlySet<string> = new Set(),
+) {
+  const available = existing.filter((row) => !excludedPageIds.has(row.id));
+  const exact = available.find((row) => row.automatedIdentity === identity);
+  if (exact) return exact;
+  const aliases = [identity, ...sourceIds].flatMap(legacyIdentityAliases);
+  const candidates = available.filter(
+    (row) =>
+      row.automatedIdentity !== null &&
+      aliases.some(
+        (alias) =>
+          row.automatedIdentity === alias || row.automatedIdentity?.startsWith(`${alias}-`),
+      ),
+  );
+  const titleTokens = meaningfulTokens(title ?? "");
+  return candidates.sort((left, right) => {
+    const score = (row: ExistingAction) => {
+      const identityTokens = meaningfulTokens(row.automatedIdentity ?? "");
+      const actionTokens = meaningfulTokens(String(row.properties.Action ?? ""));
+      const identityOverlap = identityTokens.filter((token) => titleTokens.includes(token)).length;
+      const actionOverlap = actionTokens.filter((token) => titleTokens.includes(token)).length;
+      const exactAlias = aliases.includes(row.automatedIdentity ?? "") ? 1 : 0;
+      return identityOverlap * 10 + actionOverlap * 5 + exactAlias;
+    };
+    return score(right) - score(left);
+  })[0];
+}
+
+export function selectTrackedTasks(
+  tasks: ReadonlyArray<TaskProjection>,
+  existing: ReadonlyArray<ExistingAction>,
+) {
+  return tasks.filter(
+    (task) =>
+      task.state === "ready" ||
+      task.state === "review" ||
+      findExistingAction(existing, task.id, task.sourceIds, task.title) !== undefined,
+  );
+}
+
+function legacyIdentityAliases(identity: string): Array<string> {
+  const moduleItem = identity.match(/:module:[^:]+:item:([^:]+)$/)?.[1];
+  if (moduleItem) return [moduleItem];
+  const source = identity.match(
+    /^course:[^:]+:(?:assignment|quiz|announcement|page|file|document|planner-item):(.+)$/,
+  )?.[1];
+  return source ? [source] : [];
+}
+
+const IDENTITY_STOP_WORDS = new Set([
+  "action",
+  "assignment",
+  "create",
+  "prepare",
+  "preparation",
+  "review",
+  "task",
+  "the",
+  "write",
+]);
+
+function meaningfulTokens(value: string) {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2 && !IDENTITY_STOP_WORDS.has(token));
 }
 
 function propertiesEqual(current: Record<string, unknown>, desired: Record<string, unknown>) {
@@ -72,6 +151,7 @@ function projectionProperties(projection: TaskProjection, syncedAt: string) {
     "Official Due": projection.dueAt ?? null,
     "Source URL": projection.sourceUrl ?? null,
     "Last Synced": syncedAt,
+    "Blocked By": projection.blockedBy ?? null,
     Type: projection.needsReview
       ? "Review"
       : projection.kind === "assessment"
@@ -79,7 +159,7 @@ function projectionProperties(projection: TaskProjection, syncedAt: string) {
           ? "Quiz"
           : "Assignment"
         : "Preparation",
-    "Work Mode": projection.kind === "e-lecture" ? "Online" : "Flexible",
+    "Work Mode": projection.workMode ?? (projection.kind === "e-lecture" ? "Online" : "Flexible"),
     ...(projection.state === "done" ? { Status: "Done" } : {}),
   };
 }
@@ -95,6 +175,10 @@ function readiness(projection: TaskProjection) {
       return "Ready";
     case "locked":
       return "Locked";
+    case "waiting":
+      return "Waiting on prerequisite";
+    case "scheduled":
+      return "Scheduled";
     case "done":
       return "Completed";
     default:

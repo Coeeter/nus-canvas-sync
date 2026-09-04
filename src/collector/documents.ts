@@ -11,7 +11,7 @@ import { sanitizeSourceText } from "../normalize/sanitize";
 import type { NormalizedRecord } from "../normalize/types";
 import { runProcess } from "./process";
 
-const RECOGNISABLE_FILENAME = /\b(brief|spec(ification)?|rubric|handout)\b/i;
+const RECOGNISABLE_FILENAME = /\b(?:brief|spec(?:ification)?|rubric|handout)\b/i;
 
 /**
  * SRC-006: selects only files referenced by changed prose (a Canvas file URL
@@ -25,8 +25,12 @@ export function selectRelevantFiles(
 ): Array<CanvasFile> {
   return files.filter((file) => {
     if (RECOGNISABLE_FILENAME.test(file.display_name)) return true;
+    const nameWithoutExtension = file.display_name.replace(/\.[^.]+$/, "").toLowerCase();
     return changedProse.some(
-      (prose) => prose.includes(`/files/${file.id}`) || prose.includes(file.url),
+      (prose) =>
+        prose.includes(`/files/${file.id}`) ||
+        prose.includes(file.url) ||
+        prose.toLowerCase().includes(nameWithoutExtension),
     );
   });
 }
@@ -36,14 +40,24 @@ export function hasDownloadableUrl(file: CanvasFile): boolean {
   return file.url.trim().length > 0;
 }
 
+export function isExtractableDocument(file: CanvasFile): boolean {
+  return /\.(?:pdf|txt|md)$/i.test(file.display_name);
+}
+
 export function referencedByForFile(
   file: CanvasFile,
   records: ReadonlyArray<NormalizedRecord>,
 ): Array<string> {
+  const nameWithoutExtension = file.display_name.replace(/\.[^.]+$/, "").toLowerCase();
   return records
     .filter((record) => {
       const value = JSON.stringify(record.fields);
-      return value.includes(`/files/${file.id}`) || value.includes(sanitizeSourceText(file.url));
+      return (
+        value.includes(`/files/${file.id}`) ||
+        value.includes(sanitizeSourceText(file.url)) ||
+        ((record.kind === "announcement" || record.kind === "assignment") &&
+          value.toLowerCase().includes(nameWithoutExtension))
+      );
     })
     .map((record) => record.id)
     .sort();

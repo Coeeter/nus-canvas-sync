@@ -29,6 +29,8 @@ export function projectTask(fact: TaskFact, now: Date): TaskProjection {
   if (fact.kind === "preparation" && fact.eventEndsAt && now >= new Date(fact.eventEndsAt)) {
     return base("expired", "Preparation event has ended");
   }
+  if (fact.blockedBy) return base("waiting", `Waiting on ${fact.blockedBy}`);
+  if (fact.scheduled) return base("scheduled", "Assessed work takes place during class");
   if (fact.availableFrom && now < new Date(fact.availableFrom)) {
     return base("locked", "Authoritative release time is in the future");
   }

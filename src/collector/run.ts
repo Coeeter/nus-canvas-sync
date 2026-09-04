@@ -21,6 +21,7 @@ import { courseCoverageSucceeded } from "./coverage";
 import {
   downloadAndExtract,
   hasDownloadableUrl,
+  isExtractableDocument,
   referencedByForFile,
   selectRelevantFiles,
 } from "./documents";
@@ -284,7 +285,7 @@ const collectDocuments = Effect.fn("collectDocuments")(function* (
   );
   const changedIds = new Set(changedRecords.map((record) => record.id));
   const selected = filesResult.success.filter((file) => {
-    if (!hasDownloadableUrl(file)) return false;
+    if (!hasDownloadableUrl(file) || !isExtractableDocument(file)) return false;
     const references = referencedByForFile(file, courseRecords);
     return references.length > 0 || selectRelevantFiles([file], []).length === 1;
   });

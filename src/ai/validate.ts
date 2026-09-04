@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { TaskAffectingFailureError } from "../errors";
 import type { CandidateEnvelope } from "./types";
 
-const CandidateEnvelopeSchema = Schema.Struct({
+export const CandidateEnvelopeSchema = Schema.Struct({
   candidates: Schema.Array(
     Schema.Struct({
       courseCode: Schema.Literals(["CS2030S", "GEA1000", "GESS1001", "IS1128", "MA1301"]),

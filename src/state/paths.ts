@@ -12,6 +12,10 @@ export function baselinePath(dataDir: string, courseCode: string) {
   return join(dataDir, "baselines", `${courseCode}.json`);
 }
 
+export function interpretationPath(dataDir: string, courseCode: string) {
+  return join(dataDir, "interpretations", `${courseCode}.json`);
+}
+
 export function runLockPath(dataDir: string) {
   return join(dataDir, "run.lock");
 }
