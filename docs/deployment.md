@@ -34,16 +34,33 @@ Create project `nus-sync` and configuration `prod`. Set these runtime values:
 - `ALERT_EMAIL_TO=nasrullah01n@gmail.com`;
 - optional `NOTION_DASHBOARD_URL` and `NOTION_HEALTH_BLOCK_ID` overrides.
 
-Create one read-only Doppler service token for `nus-sync/prod`. Store only that
-token in Dokploy as `DOPPLER_TOKEN`; the entrypoint uses `doppler run` so the
-remaining values do not need to be duplicated in Dokploy. Never paste secret
-values into logs, build arguments, Compose files, or chat.
+Create one read-only Doppler service token for `nus-sync/prod` and configure it
+as a Dokploy Doppler vault provider named `nus-sync-prod`, scoped to the
+**personal** project. Reference the remote values from the Compose environment;
+Dokploy resolves them at deployment time without storing their values:
+
+```text
+CANVAS_URL=${{vault.nus-sync-prod.CANVAS_URL}}
+CANVAS_TOKEN=${{vault.nus-sync-prod.CANVAS_TOKEN}}
+GH_TOKEN=${{vault.nus-sync-prod.GH_TOKEN}}
+NOTION_TOKEN=${{vault.nus-sync-prod.NOTION_TOKEN}}
+NOTION_DATA_SOURCE_ID=${{vault.nus-sync-prod.NOTION_DATA_SOURCE_ID}}
+RESEND_API_KEY=${{vault.nus-sync-prod.RESEND_API_KEY}}
+ALERT_EMAIL_FROM=${{vault.nus-sync-prod.ALERT_EMAIL_FROM}}
+ALERT_EMAIL_TO=${{vault.nus-sync-prod.ALERT_EMAIL_TO}}
+```
+
+Add the optional Notion overrides the same way when present. Never paste secret
+values into logs, build arguments, Compose files, Dokploy environment text, or
+chat.
 
 ## Dokploy application and schedule
 
 Create a Compose/application job under the **personal** project using
-`compose.yaml` or the GHCR image directly. Attach both persistent volumes and
-set `DOPPLER_TOKEN`. The scheduled command is the image default (`bun run sync`).
+`compose.yaml` or the GHCR image directly. Attach both persistent volumes, set
+the Dokploy vault references above, and pin `IMAGE` to the verified immutable
+`sha-<7 characters>` tag. The scheduled command is the image default
+(`bun run sync`).
 
 Configure Dokploy in `Asia/Singapore` with exactly:
 
