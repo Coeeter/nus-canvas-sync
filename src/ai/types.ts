@@ -3,7 +3,7 @@ import type { TaskKind } from "../domain/task";
 
 export interface CourseCandidate {
   courseCode: CourseCode;
-  sourceIds: Array<string>;
+  sourceIds: ReadonlyArray<string>;
   evidence: string;
   kind: TaskKind;
   title: string;
@@ -16,5 +16,5 @@ export interface CourseCandidate {
 }
 
 export interface CandidateEnvelope {
-  candidates: Array<CourseCandidate>;
+  candidates: ReadonlyArray<CourseCandidate>;
 }

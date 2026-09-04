@@ -1,4 +1,4 @@
-import { Effect, Redacted, type Schema } from "effect";
+import { Context, Effect, Layer, Redacted, type Schema } from "effect";
 import {
   announcementListSchema,
   assignmentListSchema,
@@ -14,10 +14,8 @@ import { AppConfig } from "../config/env";
 import { decodeEndpoint, decodeRequired } from "./outcome";
 import { runProcess } from "./process";
 
-export class CanvasClient extends Effect.Service<CanvasClient>()("CanvasClient", {
-  accessors: true,
-  dependencies: [AppConfig.Default],
-  effect: Effect.gen(function* () {
+export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient", {
+  make: Effect.gen(function* () {
     const config = yield* AppConfig;
     const env = {
       CANVAS_URL: config.canvasUrl,
@@ -25,71 +23,76 @@ export class CanvasClient extends Effect.Service<CanvasClient>()("CanvasClient",
       PATH: process.env.PATH ?? "",
     };
 
-    const call = <A, I>(
+    const call = Effect.fn("CanvasClient.call")(function* <A>(
       course: Course,
       endpoint: CourseEndpoint,
       args: ReadonlyArray<string>,
-      schema: Schema.Schema<A, I>,
-    ) =>
-      Effect.gen(function* () {
-        const fullArgs = [...args, "--no-cache", "--quiet", "-o", "json"];
-        const result = yield* runProcess("canvas", fullArgs, env);
-        return yield* decodeEndpoint({
-          course: course.code,
-          endpoint,
-          command: `canvas ${fullArgs.join(" ")}`,
-          result,
-          schema,
-        });
+      schema: Schema.ConstraintDecoder<A, never>,
+    ) {
+      const fullArgs = [...args, "--no-cache", "--quiet", "-o", "json"];
+      const result = yield* runProcess("canvas", fullArgs, env);
+      return yield* decodeEndpoint({
+        course: course.code,
+        endpoint,
+        command: `canvas ${fullArgs.join(" ")}`,
+        result,
+        schema,
       });
+    });
 
-    const callRequired = <A, I>(args: ReadonlyArray<string>, schema: Schema.Schema<A, I>) =>
-      Effect.gen(function* () {
-        const fullArgs = [...args, "--no-cache", "--quiet", "-o", "json"];
-        const result = yield* runProcess("canvas", fullArgs, env);
-        return yield* decodeRequired({
-          command: `canvas ${fullArgs.join(" ")}`,
-          result,
-          schema,
-        });
+    const callRequired = Effect.fn("CanvasClient.callRequired")(function* <A>(
+      args: ReadonlyArray<string>,
+      schema: Schema.ConstraintDecoder<A, never>,
+    ) {
+      const fullArgs = [...args, "--no-cache", "--quiet", "-o", "json"];
+      const result = yield* runProcess("canvas", fullArgs, env);
+      return yield* decodeRequired({
+        command: `canvas ${fullArgs.join(" ")}`,
+        result,
+        schema,
       });
+    });
 
     const courseArgs = (id: number) => String(id);
 
-    const assignments = (course: Course) =>
-      call(
+    const assignments = Effect.fn("CanvasClient.assignments")(function* (course: Course) {
+      return yield* call(
         course,
         "assignments",
         ["assignments", "list", "--course-id", courseArgs(course.id), "--include", "submission"],
         assignmentListSchema,
       );
+    });
 
-    const quizzes = (course: Course) =>
-      call(
+    const quizzes = Effect.fn("CanvasClient.quizzes")(function* (course: Course) {
+      return yield* call(
         course,
         "quizzes",
         ["quizzes", "list", "--course-id", courseArgs(course.id)],
         quizListSchema,
       );
+    });
 
-    const announcements = (course: Course) =>
-      call(
+    const announcements = Effect.fn("CanvasClient.announcements")(function* (course: Course) {
+      return yield* call(
         course,
         "announcements",
         ["announcements", "list", "--course-id", courseArgs(course.id)],
         announcementListSchema,
       );
+    });
 
-    const files = (course: Course) =>
-      call(
+    const files = Effect.fn("CanvasClient.files")(function* (course: Course) {
+      return yield* call(
         course,
         "files",
         ["files", "list", "--course-id", courseArgs(course.id)],
         fileListSchema,
       );
+    });
 
-    const modules = (course: Course) =>
-      call(
+    const modules = Effect.fn("CanvasClient.modules")(function* (course: Course) {
+      return yield* call(
         course,
         "modules",
         [
@@ -102,53 +105,59 @@ export class CanvasClient extends Effect.Service<CanvasClient>()("CanvasClient",
         ],
         moduleListSchema,
       );
+    });
 
-    const frontPage = (course: Course) =>
-      call(
+    const frontPage = Effect.fn("CanvasClient.frontPage")(function* (course: Course) {
+      return yield* call(
         course,
         "frontPage",
         ["pages", "front", "--course-id", courseArgs(course.id)],
         pageBodySchema,
       );
+    });
 
-    const pagesIndex = (course: Course) =>
-      call(
+    const pagesIndex = Effect.fn("CanvasClient.pagesIndex")(function* (course: Course) {
+      return yield* call(
         course,
         "pages",
         ["pages", "list", "--course-id", courseArgs(course.id)],
         pageIndexSchema,
       );
+    });
 
-    const pageBody = (course: Course, url: string) =>
-      callRequired(["pages", "get", "--course-id", courseArgs(course.id), url], pageBodySchema);
+    const pageBody = Effect.fn("CanvasClient.pageBody")(function* (course: Course, url: string) {
+      return yield* callRequired(
+        ["pages", "get", "--course-id", courseArgs(course.id), url],
+        pageBodySchema,
+      );
+    });
 
-    const plannerItems = (
+    const plannerItems = Effect.fn("CanvasClient.plannerItems")(function* (
       courses: ReadonlyArray<Course>,
       window: { startDate: string; endDate: string },
-    ) =>
-      Effect.gen(function* () {
-        const context = courses.map((c) => `course_${c.id}`).join(",");
-        const args = [
-          "planner",
-          "items",
-          "--context",
-          context,
-          "--start-date",
-          window.startDate,
-          "--end-date",
-          window.endDate,
-          "--no-cache",
-          "--quiet",
-          "-o",
-          "json",
-        ];
-        const result = yield* runProcess("canvas", args, env);
-        return yield* decodeRequired({
-          command: `canvas ${args.join(" ")}`,
-          result,
-          schema: plannerListSchema,
-        });
+    ) {
+      const context = courses.map((c) => `course_${c.id}`).join(",");
+      const args = [
+        "planner",
+        "items",
+        "--context",
+        context,
+        "--start-date",
+        window.startDate,
+        "--end-date",
+        window.endDate,
+        "--no-cache",
+        "--quiet",
+        "-o",
+        "json",
+      ];
+      const result = yield* runProcess("canvas", args, env);
+      return yield* decodeRequired({
+        command: `canvas ${args.join(" ")}`,
+        result,
+        schema: plannerListSchema,
       });
+    });
 
     return {
       assignments,
@@ -162,4 +171,6 @@ export class CanvasClient extends Effect.Service<CanvasClient>()("CanvasClient",
       plannerItems,
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(AppConfig.layer));
+}

@@ -1,5 +1,7 @@
-import { FileSystem, Path } from "@effect/platform";
-import { Effect } from "effect";
+import * as Clock from "effect/Clock";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import type { CourseCode } from "../config/courses";
 import type { NormalizedRecord } from "../normalize/types";
 import { writeJsonAtomic } from "./atomic";
@@ -13,30 +15,30 @@ export interface Snapshot {
 }
 
 /** DIF-001, DIF-006: writes one timestamped, immutable snapshot and repoints `latest` to it. */
-export function writeSnapshot(dataDir: string, snapshot: Snapshot) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const pathService = yield* Path.Path;
-    const dir = snapshotDir(dataDir, snapshot.timestamp);
-    yield* fs.makeDirectory(dir, { recursive: true });
+export const writeSnapshot = Effect.fn("writeSnapshot")(function* (
+  dataDir: string,
+  snapshot: Snapshot,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+  const dir = snapshotDir(dataDir, snapshot.timestamp);
+  yield* fs.makeDirectory(dir, { recursive: true });
 
-    yield* writeJsonAtomic(pathService.join(dir, "manifest.json"), snapshot.manifest);
-    for (const [courseCode, records] of Object.entries(snapshot.courses)) {
-      yield* writeJsonAtomic(pathService.join(dir, "courses", `${courseCode}.json`), records);
-    }
+  yield* writeJsonAtomic(pathService.join(dir, "manifest.json"), snapshot.manifest);
+  for (const [courseCode, records] of Object.entries(snapshot.courses)) {
+    yield* writeJsonAtomic(pathService.join(dir, "courses", `${courseCode}.json`), records);
+  }
 
-    yield* repointLatest(dataDir, dir);
-    return dir;
-  });
-}
+  yield* repointLatest(dataDir, dir);
+  return dir;
+});
 
-function repointLatest(dataDir: string, targetDir: string) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const pathService = yield* Path.Path;
-    const linkPath = latestSnapshotLink(dataDir);
-    const tmpLinkPath = `${linkPath}.tmp-${process.pid}-${Date.now()}`;
-    yield* fs.symlink(pathService.relative(dataDir, targetDir), tmpLinkPath);
-    yield* fs.rename(tmpLinkPath, linkPath);
-  });
-}
+const repointLatest = Effect.fn("repointLatest")(function* (dataDir: string, targetDir: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+  const linkPath = latestSnapshotLink(dataDir);
+  const timestamp = yield* Clock.currentTimeMillis;
+  const tmpLinkPath = `${linkPath}.tmp-${process.pid}-${timestamp}`;
+  yield* fs.symlink(pathService.relative(dataDir, targetDir), tmpLinkPath);
+  yield* fs.rename(tmpLinkPath, linkPath);
+});

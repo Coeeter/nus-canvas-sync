@@ -1,12 +1,17 @@
+import { BunRuntime } from "@effect/platform-bun";
+import { Console, Effect } from "effect";
 import { replayFixtures } from "../collector/replay";
 
-const dir = Bun.argv[2];
-if (!dir) {
-  console.error("usage: bun run fixture:replay -- <fixture-dir>");
-  process.exit(1);
-}
+const program = Effect.gen(function* () {
+  const dir = Bun.argv[2];
+  if (!dir) return yield* Effect.fail(new Error("usage: bun run fixture:replay -- <fixture-dir>"));
 
-const results = replayFixtures(dir);
-for (const [course, diff] of Object.entries(results)) {
-  console.log(`${course}: +${diff.added.length} ~${diff.changed.length} -${diff.removed.length}`);
-}
+  const results = yield* Effect.try(() => replayFixtures(dir));
+  for (const [course, diff] of Object.entries(results)) {
+    yield* Console.log(
+      `${course}: +${diff.added.length} ~${diff.changed.length} -${diff.removed.length}`,
+    );
+  }
+});
+
+BunRuntime.runMain(program);

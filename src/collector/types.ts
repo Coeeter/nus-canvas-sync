@@ -1,4 +1,4 @@
-import type { Either } from "effect";
+import type { Result } from "effect";
 import type {
   CapabilityGapError,
   TaskAffectingFailureError,
@@ -11,4 +11,4 @@ export type EndpointFailure =
   | TaskAffectingFailureError;
 
 /** The per-endpoint result the manifest records: success data, or which of the three failure shapes occurred. */
-export type EndpointResult<A> = Either.Either<A, EndpointFailure>;
+export type EndpointResult<A> = Result.Result<A, EndpointFailure>;

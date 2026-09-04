@@ -1,4 +1,4 @@
-import { Effect, Redacted, Schema } from "effect";
+import { Context, Effect, Layer, Redacted, Schema } from "effect";
 import {
   githubCommitListSchema,
   githubRepoListSchema,
@@ -11,10 +11,8 @@ import { runProcess } from "./process";
 const CS2030S_ORG = "nus-cs2030s-2627-s1";
 const githubCommitPagesSchema = Schema.Array(githubCommitListSchema);
 
-export class GithubClient extends Effect.Service<GithubClient>()("GithubClient", {
-  accessors: true,
-  dependencies: [AppConfig.Default],
-  effect: Effect.gen(function* () {
+export class GithubClient extends Context.Service<GithubClient>()("GithubClient", {
+  make: Effect.gen(function* () {
     const config = yield* AppConfig;
     const env = { GH_TOKEN: Redacted.value(config.githubToken), PATH: process.env.PATH ?? "" };
 
@@ -47,26 +45,25 @@ export class GithubClient extends Effect.Service<GithubClient>()("GithubClient",
       });
     });
 
-    const commits = (repoName: string) =>
-      Effect.gen(function* () {
-        const args = [
-          "api",
-          "-X",
-          "GET",
-          `repos/${CS2030S_ORG}/${repoName}/commits`,
-          "-f",
-          "per_page=100",
-          "--paginate",
-          "--slurp",
-        ];
-        const result = yield* runProcess("gh", args, env);
-        const pages = yield* decodeRequired({
-          command: `gh ${args.join(" ")}`,
-          result,
-          schema: githubCommitPagesSchema,
-        });
-        return pages.flat();
+    const commits = Effect.fn("GithubClient.commits")(function* (repoName: string) {
+      const args = [
+        "api",
+        "-X",
+        "GET",
+        `repos/${CS2030S_ORG}/${repoName}/commits`,
+        "-f",
+        "per_page=100",
+        "--paginate",
+        "--slurp",
+      ];
+      const result = yield* runProcess("gh", args, env);
+      const pages = yield* decodeRequired({
+        command: `gh ${args.join(" ")}`,
+        result,
+        schema: githubCommitPagesSchema,
       });
+      return pages.flat();
+    });
 
     const relevantExerciseRepos = (login: string, repoNames: ReadonlyArray<string>) =>
       repoNames.filter((name) => new RegExp(`^exercises-ex\\d+-${login}$`).test(name));
@@ -78,7 +75,9 @@ export class GithubClient extends Effect.Service<GithubClient>()("GithubClient",
       relevantExerciseRepos,
     };
   }),
-}) {}
+}) {
+  static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(AppConfig.layer));
+}
 
 export function filterRelevantRepos<T extends { name: string }>(
   repos: ReadonlyArray<T>,

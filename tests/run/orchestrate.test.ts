@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { BunServices } from "@effect/platform-bun";
+import { DateTime, Effect } from "effect";
 import type { CollectionResult } from "../../src/collector/run";
 import { COURSES, type CourseCode } from "../../src/config/courses";
 import type { NormalizedRecord } from "../../src/normalize/types";
@@ -48,28 +50,30 @@ test("one course failure retains only its baseline and sends one alert", async (
     },
   } as CollectionResult;
   let alerts = 0;
-  const result = await runSync({
-    collect: () => Promise.resolve(collection),
-    notion: {
-      listExistingActions: () => Promise.resolve([]),
-      applyAndVerify: () => Promise.reject(new Error("unexpected write")),
-      updateHealthBlock: () => Promise.resolve(),
-    },
-    interpret: (input) =>
-      input.courseCode === "IS1128"
-        ? Promise.reject(new Error("invalid twice"))
-        : Promise.resolve({ candidates: [] }),
-    alert: {
-      send: () => {
-        alerts += 1;
-        return Promise.resolve();
+  const result = await Effect.runPromise(
+    runSync({
+      collect: Effect.succeed(collection),
+      notion: {
+        listExistingActions: () => Effect.succeed([]),
+        applyAndVerify: () => Effect.fail(new Error("unexpected write")),
+        updateHealthBlock: () => Effect.void,
       },
-    },
-    healthBlockId: "health",
-    dashboardUrl: "https://notion.example",
-    dataDir,
-    now: new Date("2026-09-03T04:00:00Z"),
-  });
+      interpret: (input) =>
+        input.courseCode === "IS1128"
+          ? Effect.fail(new Error("invalid twice"))
+          : Effect.succeed({ candidates: [] }),
+      alert: {
+        send: () => {
+          alerts += 1;
+          return Effect.void;
+        },
+      },
+      healthBlockId: "health",
+      dashboardUrl: "https://notion.example",
+      dataDir,
+      now: DateTime.makeUnsafe("2026-09-03T04:00:00Z"),
+    }).pipe(Effect.provide(BunServices.layer)),
+  );
   expect(result.ok).toBe(false);
   expect(alerts).toBe(1);
   expect(result.health).toContain("IS1128 failed");

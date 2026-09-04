@@ -1,4 +1,4 @@
-import { Effect, ParseResult, Schema } from "effect";
+import { Effect, Schema, SchemaIssue } from "effect";
 import {
   acceptedAlternates,
   acceptsGapFailure,
@@ -10,6 +10,8 @@ import {
 } from "../config/courses";
 import { CapabilityGapError, TaskAffectingFailureError, TransientFailureError } from "../errors";
 import type { ProcessResult } from "./process";
+
+const formatSchemaIssue = SchemaIssue.makeFormatterDefault();
 
 export type FailureClass = "auth" | "not-found" | "transient" | "unknown";
 
@@ -34,24 +36,29 @@ function sanitize(text: string) {
     .slice(0, 2000);
 }
 
-function decodeJson<A, I>(command: string, result: ProcessResult, schema: Schema.Schema<A, I>) {
-  return Effect.gen(function* () {
-    const json = yield* Effect.try({
-      try: () => JSON.parse(result.stdout) as unknown,
-      catch: (error) =>
-        new TaskAffectingFailureError({ command, message: `invalid JSON: ${String(error)}` }),
-    });
-    return yield* Schema.decodeUnknown(schema)(json).pipe(
-      Effect.mapError(
-        (error) =>
-          new TaskAffectingFailureError({
-            command,
-            message: `schema validation failed: ${ParseResult.TreeFormatter.formatErrorSync(error)}`,
-          }),
-      ),
-    );
-  });
-}
+const decodeJson = Effect.fn("decodeJson")(function* <A>(
+  command: string,
+  result: ProcessResult,
+  schema: Schema.ConstraintDecoder<A, never>,
+) {
+  const json = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(
+    result.stdout,
+  ).pipe(
+    Effect.mapError(
+      (error) =>
+        new TaskAffectingFailureError({ command, message: `invalid JSON: ${error.message}` }),
+    ),
+  );
+  return yield* Schema.decodeUnknownEffect(schema)(json).pipe(
+    Effect.mapError(
+      (error) =>
+        new TaskAffectingFailureError({
+          command,
+          message: `schema validation failed: ${formatSchemaIssue(error.issue)}`,
+        }),
+    ),
+  );
+});
 
 /**
  * Turns a raw process result for one course endpoint into data or a failure
@@ -63,16 +70,16 @@ function decodeJson<A, I>(command: string, result: ProcessResult, schema: Schema
  * schema validation is task-affecting: Canvas changed shape under us and
  * downstream code must not silently misread it.
  */
-export function decodeEndpoint<A, I>(params: {
+export const decodeEndpoint = Effect.fn("decodeEndpoint")(function* <A>(params: {
   course: CourseCode;
   endpoint: CourseEndpoint;
   command: string;
   result: ProcessResult;
-  schema: Schema.Schema<A, I>;
+  schema: Schema.ConstraintDecoder<A, never>;
   capabilities?: Record<CourseCode, CourseCapabilities>;
-}): Effect.Effect<A, CapabilityGapError | TransientFailureError | TaskAffectingFailureError> {
+}): Effect.fn.Return<A, CapabilityGapError | TransientFailureError | TaskAffectingFailureError> {
   const { course, endpoint, command, result, schema, capabilities = COURSE_CAPABILITIES } = params;
-  if (result.exitCode === 0) return decodeJson(command, result, schema);
+  if (result.exitCode === 0) return yield* decodeJson(command, result, schema);
 
   const failureClass = classifyFailure(result.stderr);
 
@@ -82,36 +89,37 @@ export function decodeEndpoint<A, I>(params: {
     acceptsGapFailure(course, endpoint, failureClass, capabilities)
   ) {
     const alternates = acceptedAlternates(course, endpoint, capabilities);
-    return Effect.fail(
-      new CapabilityGapError({
-        course,
-        endpoint,
-        reason: `declared ${failureClass} gap; accepted alternates: ${alternates.join(", ")}`,
-      }),
-    );
+    return yield* new CapabilityGapError({
+      course,
+      endpoint,
+      reason: `declared ${failureClass} gap; accepted alternates: ${alternates.join(", ")}`,
+    });
   }
 
   if (failureClass === "transient") {
-    return Effect.fail(new TransientFailureError({ command, message: sanitize(result.stderr) }));
+    return yield* new TransientFailureError({ command, message: sanitize(result.stderr) });
   }
 
-  return Effect.fail(new TaskAffectingFailureError({ command, message: sanitize(result.stderr) }));
-}
+  return yield* new TaskAffectingFailureError({
+    command,
+    message: sanitize(result.stderr),
+  });
+});
 
 /**
  * For top-level endpoints (planner, GitHub) that have no per-course
  * capability declaration and are always required (SRC-001).
  */
-export function decodeRequired<A, I>(params: {
+export const decodeRequired = Effect.fn("decodeRequired")(function* <A>(params: {
   command: string;
   result: ProcessResult;
-  schema: Schema.Schema<A, I>;
-}): Effect.Effect<A, TransientFailureError | TaskAffectingFailureError> {
+  schema: Schema.ConstraintDecoder<A, never>;
+}): Effect.fn.Return<A, TransientFailureError | TaskAffectingFailureError> {
   const { command, result, schema } = params;
-  if (result.exitCode === 0) return decodeJson(command, result, schema);
+  if (result.exitCode === 0) return yield* decodeJson(command, result, schema);
   const failureClass = classifyFailure(result.stderr);
   if (failureClass === "transient") {
-    return Effect.fail(new TransientFailureError({ command, message: sanitize(result.stderr) }));
+    return yield* new TransientFailureError({ command, message: sanitize(result.stderr) });
   }
-  return Effect.fail(new TaskAffectingFailureError({ command, message: sanitize(result.stderr) }));
-}
+  return yield* new TaskAffectingFailureError({ command, message: sanitize(result.stderr) });
+});

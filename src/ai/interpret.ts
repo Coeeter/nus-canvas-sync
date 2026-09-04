@@ -1,6 +1,5 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { Effect, FileSystem, Path, Predicate, Schema, Stream } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type { CourseInterpretationInput } from "./input";
 import { buildCoursePrompt } from "./input";
 import type { CandidateEnvelope } from "./types";
@@ -12,13 +11,17 @@ export interface CodexExecutor {
     schemaPath: string,
     outputPath: string,
     workingDirectory: string,
-  ): Promise<void>;
+  ): Effect.Effect<void, unknown, ChildProcessSpawner.ChildProcessSpawner>;
 }
 
-const STDERR_DETAIL_LIMIT = 2000;
+export class CodexExecutionError extends Schema.TaggedError<CodexExecutionError>()(
+  "CodexExecutionError",
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
 
-// argv is logged/inherited by the OS; the prompt travels over stdin instead so
-// it never appears there (and so it can't blow past the OS argv/env size limit).
+const STDERR_DETAIL_LIMIT = 2000;
+const JsonValue = Schema.fromJsonString(Schema.Unknown);
+
 export function buildCodexArgs(
   schemaPath: string,
   outputPath: string,
@@ -47,8 +50,6 @@ export function buildCodexArgs(
   ];
 }
 
-// Strips values that would let anyone who reads a crash report replay the caller's
-// credentials, then bounds the remainder so a runaway CLI can't flood logs/errors.
 export function sanitizeStderr(text: string, maxLength = STDERR_DETAIL_LIMIT): string {
   const redacted = text
     .replace(/Bearer\s+[A-Za-z0-9\-_.~+/]+=*/gi, "Bearer [REDACTED]")
@@ -58,71 +59,85 @@ export function sanitizeStderr(text: string, maxLength = STDERR_DETAIL_LIMIT): s
 }
 
 export class CodexCliExecutor implements CodexExecutor {
-  async execute(prompt: string, schemaPath: string, outputPath: string, workingDirectory: string) {
-    const env = Object.fromEntries(
-      ["PATH", "CODEX_HOME", "HOME", "LANG", "LC_ALL", "SSL_CERT_FILE"].flatMap((key) =>
-        process.env[key] ? [[key, process.env[key]!]] : [],
-      ),
-    );
-    const processResult = Bun.spawn(buildCodexArgs(schemaPath, outputPath, workingDirectory), {
-      cwd: workingDirectory,
-      env,
-      stdin: "pipe",
-      stdout: "ignore",
-      stderr: "pipe",
-    });
-
-    const writeStdin = (async () => {
-      processResult.stdin.write(prompt);
-      await processResult.stdin.end();
-    })();
-
-    const stderrChunks: Array<string> = [];
-    const drainStderr = (async () => {
-      const decoder = new TextDecoder();
-      for await (const chunk of processResult.stderr as AsyncIterable<Uint8Array>) {
-        stderrChunks.push(decoder.decode(chunk, { stream: true }));
-      }
-    })();
-
-    const [exitCode] = await Promise.all([processResult.exited, writeStdin, drainStderr]);
-    if (exitCode !== 0) {
-      const detail = sanitizeStderr(stderrChunks.join(""));
-      throw new Error(`Codex exited with status ${exitCode}${detail ? `: ${detail}` : ""}`);
-    }
+  execute(prompt: string, schemaPath: string, outputPath: string, workingDirectory: string) {
+    return executeCodex(prompt, schemaPath, outputPath, workingDirectory).pipe(Effect.scoped);
   }
 }
 
-export async function interpretCourse(
+const executeCodex = Effect.fn("CodexCliExecutor.execute")(function* (
+  prompt: string,
+  schemaPath: string,
+  outputPath: string,
+  workingDirectory: string,
+) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const env = Object.fromEntries(
+    ["PATH", "CODEX_HOME", "HOME", "LANG", "LC_ALL", "SSL_CERT_FILE"].flatMap((key) => {
+      const value = process.env[key];
+      return Predicate.isString(value) ? [[key, value] as const] : [];
+    }),
+  );
+  const args = buildCodexArgs(schemaPath, outputPath, workingDirectory);
+  const command = ChildProcess.make(args[0] ?? "codex", args.slice(1), {
+    cwd: workingDirectory,
+    env,
+    stdin: Stream.fromIterable([new TextEncoder().encode(prompt)]),
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  const handle = yield* spawner
+    .spawn(command)
+    .pipe(
+      Effect.mapError(
+        (cause) => new CodexExecutionError({ message: "Failed to start Codex", cause }),
+      ),
+    );
+  const [exitCode, stderr] = yield* Effect.all(
+    [handle.exitCode, handle.stderr.pipe(Stream.decodeText(), Stream.mkString)] as const,
+    { concurrency: "unbounded" },
+  ).pipe(
+    Effect.mapError((cause) => new CodexExecutionError({ message: "Codex process failed", cause })),
+  );
+  if (exitCode !== ChildProcessSpawner.ExitCode(0)) {
+    const detail = sanitizeStderr(stderr);
+    return yield* new CodexExecutionError({
+      message: `Codex exited with status ${exitCode}${detail ? `: ${detail}` : ""}`,
+      cause: exitCode,
+    });
+  }
+});
+
+export const interpretCourse = Effect.fn("interpretCourse")(function* (
   input: CourseInterpretationInput,
   instructions: string,
   schema: string,
   executor: CodexExecutor,
-): Promise<CandidateEnvelope> {
+) {
   if (input.changedRecords.length === 0 && input.referencedDocuments.length === 0) {
-    return { candidates: [] };
+    return { candidates: [] } satisfies CandidateEnvelope;
   }
-  const directory = await mkdtemp(join(tmpdir(), "nus-sync-codex-"));
-  const schemaPath = join(directory, "schema.json");
-  const outputPath = join(directory, "output.json");
-  await writeFile(schemaPath, schema, { mode: 0o600 });
-  try {
-    const prompt = buildCoursePrompt(input, instructions);
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        await executor.execute(prompt, schemaPath, outputPath, directory);
-        const raw = JSON.parse(await readFile(outputPath, "utf8"));
-        const allowed = new Set(
-          [...input.changedRecords, ...input.referencedDocuments].map((record) => record.id),
-        );
-        return validateCandidates(raw, input.courseCode, allowed);
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw lastError;
-  } finally {
-    await rm(directory, { force: true, recursive: true });
-  }
-}
+
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const directory = yield* fs.makeTempDirectoryScoped({ prefix: "nus-sync-codex-" });
+  const schemaPath = path.join(directory, "schema.json");
+  const outputPath = path.join(directory, "output.json");
+  yield* fs.writeFileString(schemaPath, schema, { mode: 0o600 });
+  const prompt = buildCoursePrompt(input, instructions);
+  const allowed = new Set(
+    [...input.changedRecords, ...input.referencedDocuments].map((record) => record.id),
+  );
+
+  return yield* Effect.gen(function* () {
+    yield* executor.execute(prompt, schemaPath, outputPath, directory);
+    const encoded = yield* fs.readFileString(outputPath);
+    const raw = yield* Schema.decodeUnknownEffect(JsonValue)(encoded);
+    return yield* Effect.try({
+      try: () => validateCandidates(raw, input.courseCode, allowed),
+      catch: (cause) => cause,
+    });
+  }).pipe(
+    Effect.retry({ times: 1 }),
+    Effect.withSpan("nus-sync.ai.interpret", { attributes: { course: input.courseCode } }),
+  );
+}, Effect.scoped);

@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { writeFile } from "node:fs/promises";
+import { writeFileSync } from "node:fs";
+import { BunServices } from "@effect/platform-bun";
+import { Effect } from "effect";
 import type { CodexExecutor } from "../../src/ai/interpret";
 import { buildCodexArgs, interpretCourse, sanitizeStderr } from "../../src/ai/interpret";
 import type { NormalizedRecord } from "../../src/normalize/types";
@@ -41,15 +43,17 @@ test("does not invoke Codex when there is no semantic change", async () => {
   const executor: CodexExecutor = {
     execute: () => {
       calls += 1;
-      return Promise.resolve();
+      return Effect.void;
     },
   };
   expect(
-    await interpretCourse(
-      { courseCode: "IS1128", courseContext: "", changedRecords: [], referencedDocuments: [] },
-      "",
-      "{}",
-      executor,
+    await Effect.runPromise(
+      interpretCourse(
+        { courseCode: "IS1128", courseContext: "", changedRecords: [], referencedDocuments: [] },
+        "",
+        "{}",
+        executor,
+      ).pipe(Effect.provide(BunServices.layer)),
     ),
   ).toEqual({ candidates: [] });
   expect(calls).toBe(0);
@@ -58,38 +62,44 @@ test("does not invoke Codex when there is no semantic change", async () => {
 test("retries once and rejects unsupported provenance", async () => {
   let calls = 0;
   const executor: CodexExecutor = {
-    execute: async (_prompt, _schema, output) => {
-      calls += 1;
-      const sourceIds = calls === 1 ? ["invented"] : [record.id];
-      await writeFile(
-        output,
-        JSON.stringify({
-          candidates: [
-            {
-              courseCode: "IS1128",
-              sourceIds,
-              evidence: "Quiz announced",
-              kind: "assessment",
-              title: "Quiz",
-              requiredAction: "Attempt",
-              confidence: 0.9,
-              ambiguity: null,
-            },
-          ],
-        }),
-      );
-    },
+    execute: (_prompt, _schema, output) =>
+      Effect.sync(() => {
+        calls += 1;
+        const sourceIds = calls === 1 ? ["invented"] : [record.id];
+        writeFileSync(
+          output,
+          JSON.stringify({
+            candidates: [
+              {
+                courseCode: "IS1128",
+                sourceIds,
+                evidence: "Quiz announced",
+                kind: "assessment",
+                title: "Quiz",
+                requiredAction: "Attempt",
+                availableFrom: null,
+                dueAt: null,
+                eventEndsAt: null,
+                confidence: 0.9,
+                ambiguity: null,
+              },
+            ],
+          }),
+        );
+      }),
   };
-  const result = await interpretCourse(
-    {
-      courseCode: "IS1128",
-      courseContext: "only",
-      changedRecords: [record],
-      referencedDocuments: [],
-    },
-    "rules",
-    "{}",
-    executor,
+  const result = await Effect.runPromise(
+    interpretCourse(
+      {
+        courseCode: "IS1128",
+        courseContext: "only",
+        changedRecords: [record],
+        referencedDocuments: [],
+      },
+      "rules",
+      "{}",
+      executor,
+    ).pipe(Effect.provide(BunServices.layer)),
   );
   expect(calls).toBe(2);
   expect(result.candidates[0]?.sourceIds).toEqual([record.id]);

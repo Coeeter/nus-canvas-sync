@@ -1,4 +1,4 @@
-import { Either } from "effect";
+import * as Result from "effect/Result";
 import type { EndpointResult } from "../collector/types";
 import type { CourseCode } from "../config/courses";
 
@@ -10,8 +10,8 @@ export interface EndpointOutcomeSummary {
 
 /** DIF-006: a manifest entry never carries raw data or secret values, only the outcome shape. */
 export function summarizeResult<A>(result: EndpointResult<A>): EndpointOutcomeSummary {
-  return Either.match(result, {
-    onLeft: (failure) => {
+  return Result.match(result, {
+    onFailure: (failure) => {
       switch (failure._tag) {
         case "CapabilityGapError":
           return { status: "CapabilityGapError", detail: failure.reason };
@@ -21,7 +21,7 @@ export function summarizeResult<A>(result: EndpointResult<A>): EndpointOutcomeSu
           return { status: "TaskAffectingFailureError", detail: failure.message };
       }
     },
-    onRight: (data) => ({ status: "ok", count: Array.isArray(data) ? data.length : 1 }),
+    onSuccess: (data) => ({ status: "ok", count: Array.isArray(data) ? data.length : 1 }),
   });
 }
 

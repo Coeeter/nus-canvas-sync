@@ -1,5 +1,5 @@
-import { Command } from "@effect/platform";
 import { Effect, Stream } from "effect";
+import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { TaskAffectingFailureError, TransientFailureError } from "../errors";
 
 export interface ProcessResult {
@@ -13,7 +13,10 @@ const TIMEOUT = "60 seconds";
 const collectText = <E>(stream: Stream.Stream<Uint8Array, E>) =>
   stream.pipe(
     Stream.decodeText(),
-    Stream.runFold("", (acc, chunk) => acc + chunk),
+    Stream.runFold(
+      () => "",
+      (acc, chunk) => acc + chunk,
+    ),
   );
 
 /**
@@ -24,17 +27,17 @@ const collectText = <E>(stream: Stream.Stream<Uint8Array, E>) =>
  * directly), keeping credential exposure to subprocesses an explicit,
  * auditable choice per call site (SRC-003, AI-003).
  */
-export function runProcess(
+export const runProcess = Effect.fn("runProcess")(function* (
   binary: string,
   args: ReadonlyArray<string>,
   env: Record<string, string>,
 ) {
   const commandLabel = [binary, ...args].join(" ");
-  const command = Command.make(binary, ...args).pipe(Command.env(env));
+  const command = ChildProcess.make(binary, args).pipe(ChildProcess.setEnv(env));
 
-  return Effect.scoped(
+  return yield* Effect.scoped(
     Effect.gen(function* () {
-      const process = yield* Command.start(command);
+      const process = yield* command;
       const [stdout, stderr, exitCode] = yield* Effect.all(
         [collectText(process.stdout), collectText(process.stderr), process.exitCode],
         { concurrency: "unbounded" },
@@ -42,20 +45,18 @@ export function runProcess(
       return { stdout, stderr, exitCode: Number(exitCode) };
     }),
   ).pipe(
-    Effect.timeoutFail({
+    Effect.timeoutOrElse({
       duration: TIMEOUT,
-      onTimeout: () =>
-        new TransientFailureError({ command: commandLabel, message: `timed out after ${TIMEOUT}` }),
-    }),
-    Effect.catchTags({
-      SystemError: (error) =>
+      orElse: () =>
         Effect.fail(
-          new TaskAffectingFailureError({ command: commandLabel, message: error.message }),
-        ),
-      BadArgument: (error) =>
-        Effect.fail(
-          new TaskAffectingFailureError({ command: commandLabel, message: error.message }),
+          new TransientFailureError({
+            command: commandLabel,
+            message: `timed out after ${TIMEOUT}`,
+          }),
         ),
     }),
+    Effect.catchTag("PlatformError", (error) =>
+      Effect.fail(new TaskAffectingFailureError({ command: commandLabel, message: error.message })),
+    ),
   );
-}
+});

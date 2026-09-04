@@ -1,3 +1,6 @@
+import { Effect, Redacted, Schedule, Schema } from "effect";
+import { type HttpClient, HttpClientRequest } from "effect/unstable/http";
+
 export interface FailureAlert {
   runId: string;
   runTime: string;
@@ -6,15 +9,32 @@ export interface FailureAlert {
   dashboardUrl: string;
 }
 
-export class ResendAlertClient {
-  constructor(
-    private readonly apiKey: string,
-    private readonly from: string,
-    private readonly to: string,
-    private readonly request: typeof fetch = fetch,
-  ) {}
+export class ResendRequestError extends Schema.TaggedError<ResendRequestError>()(
+  "ResendRequestError",
+  {
+    message: Schema.String,
+    retryable: Schema.Boolean,
+    cause: Schema.Defect(),
+  },
+) {}
 
-  async send(alert: FailureAlert) {
+export class ResendAlertClient {
+  readonly #apiKey: Redacted.Redacted<string>;
+
+  constructor(
+    apiKey: string | Redacted.Redacted<string>,
+    readonly from: string,
+    readonly to: string,
+    readonly httpClient: HttpClient.HttpClient,
+  ) {
+    this.#apiKey = typeof apiKey === "string" ? Redacted.make(apiKey) : apiKey;
+  }
+
+  send(alert: FailureAlert) {
+    return sendAlert(this, alert);
+  }
+
+  request(alert: FailureAlert) {
     const detail = alert.failures
       .map((failure) => `${failure.course} (${failure.stage}): ${failure.detail}`)
       .join("\n");
@@ -25,24 +45,46 @@ export class ResendAlertClient {
       text: `${alert.summary}\n\n${detail}\n\nDashboard: ${alert.dashboardUrl}`,
       html: `<p><strong>${escapeHtml(alert.summary)}</strong></p><pre>${escapeHtml(detail)}</pre><p><a href="${escapeHtml(alert.dashboardUrl)}">Open dashboard</a></p>`,
     };
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await this.request("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-          "Idempotency-Key": `nus-sync-${alert.runId}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (response.ok) return;
-      if ((response.status !== 429 && response.status < 500) || attempt === 1) {
-        throw new Error(`Resend request failed (${response.status})`);
-      }
-      await Bun.sleep(250);
-    }
+    const request = HttpClientRequest.post("https://api.resend.com/emails").pipe(
+      HttpClientRequest.bearerToken(this.#apiKey),
+      HttpClientRequest.setHeader("Idempotency-Key", `nus-sync-${alert.runId}`),
+      HttpClientRequest.acceptJson,
+    );
+    return HttpClientRequest.bodyJson(request, body).pipe(
+      Effect.flatMap(this.httpClient.execute),
+      Effect.mapError(
+        (cause) =>
+          new ResendRequestError({
+            message: "Resend request failed",
+            retryable: true,
+            cause,
+          }),
+      ),
+    );
   }
 }
+
+const sendAlertAttempt = Effect.fn("ResendAlertClient.send")(function* (
+  client: ResendAlertClient,
+  alert: FailureAlert,
+) {
+  const response = yield* client.request(alert);
+  if (response.status >= 200 && response.status < 300) return;
+  return yield* new ResendRequestError({
+    message: `Resend request failed (${response.status})`,
+    retryable: response.status === 429 || response.status >= 500,
+    cause: response.status,
+  });
+});
+
+const sendAlert = (client: ResendAlertClient, alert: FailureAlert) =>
+  sendAlertAttempt(client, alert).pipe(
+    Effect.retry(($) =>
+      $(Schedule.max([Schedule.spaced("250 millis"), Schedule.recurs(1)])).pipe(
+        Schedule.while(({ input }) => input.retryable),
+      ),
+    ),
+  );
 
 function escapeHtml(value: string) {
   const escapes: Record<string, string> = {
@@ -52,5 +94,5 @@ function escapeHtml(value: string) {
     '"': "&quot;",
     "'": "&#39;",
   };
-  return value.replace(/[&<>"']/g, (character) => escapes[character]!);
+  return value.replace(/[&<>"']/g, (character) => escapes[character] ?? character);
 }

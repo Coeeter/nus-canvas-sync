@@ -1,4 +1,4 @@
-import { Either } from "effect";
+import { Result } from "effect";
 import type {
   CanvasAnnouncement,
   CanvasAssignment,
@@ -29,7 +29,7 @@ export interface CourseEndpointResults {
   pageBodies: ReadonlyArray<EndpointResult<CanvasPageBody>>;
 }
 
-const orEmpty = <A>(result: EndpointResult<ReadonlyArray<A>>) => Either.getOrElse(result, () => []);
+const orEmpty = <A>(result: EndpointResult<ReadonlyArray<A>>) => Result.getOrElse(result, () => []);
 
 /** Normalizes only the endpoints that succeeded; failures are reported separately via the run manifest (SRC-004). */
 export function normalizeCourseRecords(course: Course, results: CourseEndpointResults) {
@@ -39,10 +39,10 @@ export function normalizeCourseRecords(course: Course, results: CourseEndpointRe
   records.push(...orEmpty(results.announcements).map((a) => normalizeAnnouncement(course, a)));
   records.push(...orEmpty(results.files).map((f) => normalizeFile(course, f)));
   records.push(...orEmpty(results.modules).map((m) => normalizeModule(course, m)));
-  if (Either.isRight(results.frontPage))
-    records.push(normalizePage(course, results.frontPage.right));
+  if (Result.isSuccess(results.frontPage))
+    records.push(normalizePage(course, results.frontPage.success));
   for (const pageResult of results.pageBodies) {
-    if (Either.isRight(pageResult)) records.push(normalizePage(course, pageResult.right));
+    if (Result.isSuccess(pageResult)) records.push(normalizePage(course, pageResult.success));
   }
   return records;
 }

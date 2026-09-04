@@ -1,5 +1,10 @@
-import { FileSystem, Path } from "@effect/platform";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import type { PlatformError } from "effect/PlatformError";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { CanvasFile } from "../../schemas/canvas.schema";
 import { TaskAffectingFailureError, type TransientFailureError } from "../errors";
 import { sanitizeSourceText } from "../normalize/sanitize";
@@ -45,69 +50,75 @@ export function referencedByForFile(
 }
 
 /** Downloads one selected file and extracts text when the format is supported (plain text now; PDF via `pdftotext` when present). */
-export function downloadAndExtract(file: CanvasFile, destDir: string) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const pathService = yield* Path.Path;
+export const downloadAndExtract = Effect.fn("downloadAndExtract")(function* (
+  file: CanvasFile,
+  destDir: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
 
-    const bytes = yield* Effect.tryPromise({
-      try: async () => {
-        const response = await fetch(file.url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return new Uint8Array(await response.arrayBuffer());
-      },
-      catch: (error) =>
-        new TaskAffectingFailureError({ command: `download ${file.url}`, message: String(error) }),
+  const bytes = yield* HttpClient.get(file.url).pipe(
+    Effect.flatMap(HttpClientResponse.filterStatusOk),
+    Effect.flatMap((response) => response.arrayBuffer),
+    Effect.map((buffer) => new Uint8Array(buffer)),
+    Effect.mapError(
+      (error) =>
+        new TaskAffectingFailureError({
+          command: `download ${file.url}`,
+          message: error.message,
+        }),
+    ),
+    Effect.provide(FetchHttpClient.layer),
+  );
+
+  yield* Effect.mapError(fs.makeDirectory(destDir, { recursive: true }), toDocumentError(file));
+  const safeName = file.display_name.replace(/[\\/]/g, "_");
+  const destPath = pathService.join(destDir, `${file.id}-${safeName}`);
+  yield* Effect.mapError(fs.writeFile(destPath, bytes), toDocumentError(file));
+
+  return yield* Effect.ensuring(
+    Effect.map(
+      Effect.mapError(extractText(destPath, file.display_name), toDocumentError(file)),
+      (text) => ({ text }),
+    ),
+    Effect.ignore(fs.remove(destPath, { force: true })),
+  );
+});
+
+const toDocumentError =
+  (file: CanvasFile) =>
+  (error: PlatformError | TaskAffectingFailureError | TransientFailureError) => {
+    if (error._tag === "TaskAffectingFailureError") return error;
+    if (error._tag === "TransientFailureError") return error;
+    return new TaskAffectingFailureError({
+      command: `extract document ${file.id}`,
+      message: error.message,
     });
+  };
 
-    yield* fs.makeDirectory(destDir, { recursive: true });
-    const safeName = file.display_name.replace(/[\\/]/g, "_");
-    const destPath = pathService.join(destDir, `${file.id}-${safeName}`);
-    yield* fs.writeFile(destPath, bytes);
-
-    return yield* extractText(destPath, file.display_name).pipe(
-      Effect.map((text) => ({ text })),
-      Effect.ensuring(fs.remove(destPath, { force: true }).pipe(Effect.ignore)),
-    );
-  }).pipe(
-    Effect.mapError((error) => {
-      const tag =
-        typeof error === "object" && error !== null && "_tag" in error ? error._tag : undefined;
-      if (tag === "TaskAffectingFailureError") return error as TaskAffectingFailureError;
-      if (tag === "TransientFailureError") return error as TransientFailureError;
-      return new TaskAffectingFailureError({
-        command: `extract document ${file.id}`,
-        message: error instanceof Error ? error.message : String(error),
-      });
+const extractText = Effect.fn("extractText")(function* (path: string, displayName: string) {
+  if (/\.(txt|md)$/i.test(displayName)) {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* Effect.orElseSucceed(fs.readFileString(path), () => null);
+  }
+  if (/\.pdf$/i.test(displayName)) {
+    const result = yield* runProcess("pdftotext", [path, "-"], {
+      PATH: process.env.PATH ?? "",
+    });
+    if (result.exitCode !== 0) {
+      return yield* Effect.fail(
+        new TaskAffectingFailureError({
+          command: "pdftotext",
+          message: result.stderr.slice(0, 500),
+        }),
+      );
+    }
+    return result.stdout;
+  }
+  return yield* Effect.fail(
+    new TaskAffectingFailureError({
+      command: "extract document",
+      message: `unsupported document format: ${displayName}`,
     }),
   );
-}
-
-function extractText(path: string, displayName: string) {
-  return Effect.gen(function* () {
-    if (/\.(txt|md)$/i.test(displayName)) {
-      const fs = yield* FileSystem.FileSystem;
-      return yield* fs.readFileString(path).pipe(Effect.orElseSucceed(() => null));
-    }
-    if (/\.pdf$/i.test(displayName)) {
-      const result = yield* runProcess("pdftotext", [path, "-"], {
-        PATH: process.env.PATH ?? "",
-      });
-      if (result.exitCode !== 0) {
-        return yield* Effect.fail(
-          new TaskAffectingFailureError({
-            command: "pdftotext",
-            message: result.stderr.slice(0, 500),
-          }),
-        );
-      }
-      return result.stdout;
-    }
-    return yield* Effect.fail(
-      new TaskAffectingFailureError({
-        command: "extract document",
-        message: `unsupported document format: ${displayName}`,
-      }),
-    );
-  });
-}
+});

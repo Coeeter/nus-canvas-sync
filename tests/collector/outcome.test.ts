@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Either, Schema } from "effect";
+import { Effect, Result, Schema } from "effect";
 import { classifyFailure, decodeEndpoint, decodeRequired } from "../../src/collector/outcome";
 import type { ProcessResult } from "../../src/collector/process";
 import type { CourseCapabilities, CourseCode } from "../../src/config/courses";
@@ -25,7 +25,7 @@ describe("classifyFailure", () => {
 describe("decodeEndpoint", () => {
   const schema = Schema.Array(Schema.Struct({ id: Schema.Number }));
 
-  test("a declared gap that 404s becomes a non-fatal CapabilityGapError (SRC-005)", async () => {
+  test("a declared gap that 404s becomes a non-fatal CapabilityGapError (SRC-005)", () => {
     const capabilities: Record<CourseCode, CourseCapabilities> = {
       CS2030S: { gaps: {} },
       GEA1000: { gaps: {} },
@@ -34,8 +34,8 @@ describe("decodeEndpoint", () => {
       MA1301: { gaps: {} },
     };
 
-    const result = await Effect.runPromise(
-      Effect.either(
+    const result = Effect.runSync(
+      Effect.result(
         decodeEndpoint({
           course: "IS1128",
           endpoint: "quizzes",
@@ -46,13 +46,13 @@ describe("decodeEndpoint", () => {
         }),
       ),
     );
-    expect(Either.isLeft(result)).toBe(true);
-    if (Either.isLeft(result)) expect(result.left._tag).toBe("CapabilityGapError");
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) expect(result.failure._tag).toBe("CapabilityGapError");
   });
 
-  test("a declared course capability gap accepts its observed authorization failure", async () => {
-    const result = await Effect.runPromise(
-      Effect.either(
+  test("a declared course capability gap accepts its observed authorization failure", () => {
+    const result = Effect.runSync(
+      Effect.result(
         decodeEndpoint({
           course: "GESS1001",
           endpoint: "files",
@@ -63,13 +63,13 @@ describe("decodeEndpoint", () => {
       ),
     );
 
-    expect(Either.isLeft(result)).toBe(true);
-    if (Either.isLeft(result)) expect(result.left._tag).toBe("CapabilityGapError");
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) expect(result.failure._tag).toBe("CapabilityGapError");
   });
 
-  test("GESS1001 files matches its declared auth gap on British 'unauthorised' wording alone", async () => {
-    const result = await Effect.runPromise(
-      Effect.either(
+  test("GESS1001 files matches its declared auth gap on British 'unauthorised' wording alone", () => {
+    const result = Effect.runSync(
+      Effect.result(
         decodeEndpoint({
           course: "GESS1001",
           endpoint: "files",
@@ -80,13 +80,13 @@ describe("decodeEndpoint", () => {
       ),
     );
 
-    expect(Either.isLeft(result)).toBe(true);
-    if (Either.isLeft(result)) expect(result.left._tag).toBe("CapabilityGapError");
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) expect(result.failure._tag).toBe("CapabilityGapError");
   });
 
-  test("an undeclared 404 is task-affecting, never silently treated as a gap", async () => {
-    const result = await Effect.runPromise(
-      Effect.either(
+  test("an undeclared 404 is task-affecting, never silently treated as a gap", () => {
+    const result = Effect.runSync(
+      Effect.result(
         decodeEndpoint({
           course: "IS1128",
           endpoint: "quizzes",
@@ -96,13 +96,13 @@ describe("decodeEndpoint", () => {
         }),
       ),
     );
-    expect(Either.isLeft(result)).toBe(true);
-    if (Either.isLeft(result)) expect(result.left._tag).toBe("TaskAffectingFailureError");
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) expect(result.failure._tag).toBe("TaskAffectingFailureError");
   });
 
-  test("an undeclared failure is task-affecting, never silently empty (SRC-004)", async () => {
-    const result = await Effect.runPromise(
-      Effect.either(
+  test("an undeclared failure is task-affecting, never silently empty (SRC-004)", () => {
+    const result = Effect.runSync(
+      Effect.result(
         decodeEndpoint({
           course: "CS2030S",
           endpoint: "assignments",
@@ -112,13 +112,13 @@ describe("decodeEndpoint", () => {
         }),
       ),
     );
-    expect(Either.isLeft(result)).toBe(true);
-    if (Either.isLeft(result)) expect(result.left._tag).toBe("TaskAffectingFailureError");
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) expect(result.failure._tag).toBe("TaskAffectingFailureError");
   });
 
-  test("a response that fails schema validation is task-affecting, not a silent empty success", async () => {
-    const result = await Effect.runPromise(
-      Effect.either(
+  test("a response that fails schema validation is task-affecting, not a silent empty success", () => {
+    const result = Effect.runSync(
+      Effect.result(
         decodeEndpoint({
           course: "CS2030S",
           endpoint: "assignments",
@@ -128,13 +128,13 @@ describe("decodeEndpoint", () => {
         }),
       ),
     );
-    expect(Either.isLeft(result)).toBe(true);
-    if (Either.isLeft(result)) expect(result.left._tag).toBe("TaskAffectingFailureError");
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) expect(result.failure._tag).toBe("TaskAffectingFailureError");
   });
 
-  test("a transient failure is retryable, distinct from a hard failure", async () => {
-    const result = await Effect.runPromise(
-      Effect.either(
+  test("a transient failure is retryable, distinct from a hard failure", () => {
+    const result = Effect.runSync(
+      Effect.result(
         decodeRequired({
           command: "canvas planner items",
           result: failResult("504 Gateway Timeout"),
@@ -142,12 +142,12 @@ describe("decodeEndpoint", () => {
         }),
       ),
     );
-    expect(Either.isLeft(result)).toBe(true);
-    if (Either.isLeft(result)) expect(result.left._tag).toBe("TransientFailureError");
+    expect(Result.isFailure(result)).toBe(true);
+    if (Result.isFailure(result)) expect(result.failure._tag).toBe("TransientFailureError");
   });
 
-  test("a valid response decodes successfully", async () => {
-    const result = await Effect.runPromise(
+  test("a valid response decodes successfully", () => {
+    const result = Effect.runSync(
       decodeRequired({
         command: "canvas planner items",
         result: okResult(JSON.stringify([{ id: 1 }])),

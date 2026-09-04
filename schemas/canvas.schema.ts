@@ -121,7 +121,7 @@ export const pageBodySchema = Schema.Struct({
 });
 export type CanvasPageBody = typeof pageBodySchema.Type;
 
-const plannerSubmissionsSchema = Schema.Union(
+const plannerSubmissionsSchema = Schema.Union([
   Schema.Literal(false),
   Schema.Struct({
     excused: Schema.Boolean,
@@ -131,7 +131,7 @@ const plannerSubmissionsSchema = Schema.Union(
     needs_grading: Schema.Boolean,
     submitted: Schema.Boolean,
   }),
-);
+]);
 
 export const plannerItemSchema = Schema.Struct({
   course_id: Schema.Number,
