@@ -70,7 +70,7 @@ export function normalizeQuiz(course: Course, raw: CanvasQuiz) {
 }
 
 export function normalizeAnnouncement(course: Course, raw: CanvasAnnouncement) {
-  return record(course, "announcement", raw.id, raw.url, {
+  return record(course, "announcement", raw.id, raw.url ?? null, {
     title: raw.title,
     message: raw.message,
     postedAt: normalizeDate(raw.posted_at),

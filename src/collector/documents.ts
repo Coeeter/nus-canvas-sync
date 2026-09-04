@@ -26,6 +26,11 @@ export function selectRelevantFiles(
   });
 }
 
+/** Canvas can list a future/locked file with a blank `url` (no download available yet); such a file is not fetchable. */
+export function hasDownloadableUrl(file: CanvasFile): boolean {
+  return file.url.trim().length > 0;
+}
+
 export function referencedByForFile(
   file: CanvasFile,
   records: ReadonlyArray<NormalizedRecord>,

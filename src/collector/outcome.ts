@@ -16,7 +16,9 @@ export type FailureClass = "auth" | "not-found" | "transient" | "unknown";
 /** Classifies a failed process's stderr so the caller can pick a capability-gap, retry, or hard-failure outcome. */
 export function classifyFailure(stderr: string): FailureClass {
   const text = stderr.toLowerCase();
-  if (/\b(401|403)\b|unauthoriz|forbidden|authentication/.test(text)) return "auth";
+  if (/\b(401|403)\b|\b(?:un|not\s+)authori[sz]|forbidden|authentication/.test(text)) {
+    return "auth";
+  }
   if (/\b404\b|not found/.test(text)) return "not-found";
   if (/\b(429|502|503|504)\b|timeout|timed out|econnreset|econnrefused|rate limit/.test(text)) {
     return "transient";

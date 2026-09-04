@@ -14,6 +14,12 @@ describe("classifyFailure", () => {
     expect(classifyFailure("Error: 503 Service Unavailable")).toBe("transient");
     expect(classifyFailure("Error: something else entirely")).toBe("unknown");
   });
+
+  test("recognizes British 'unauthorised' spelling, not just American 'unauthorized'", () => {
+    expect(classifyFailure("Error: user not authorised")).toBe("auth");
+    expect(classifyFailure("Error: user not authorized")).toBe("auth");
+    expect(classifyFailure("Error: unauthorized")).toBe("auth");
+  });
 });
 
 describe("decodeEndpoint", () => {
@@ -52,6 +58,23 @@ describe("decodeEndpoint", () => {
           endpoint: "files",
           command: "canvas files list",
           result: failResult("403 user not authorised to perform that action"),
+          schema,
+        }),
+      ),
+    );
+
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) expect(result.left._tag).toBe("CapabilityGapError");
+  });
+
+  test("GESS1001 files matches its declared auth gap on British 'unauthorised' wording alone", async () => {
+    const result = await Effect.runPromise(
+      Effect.either(
+        decodeEndpoint({
+          course: "GESS1001",
+          endpoint: "files",
+          command: "canvas files list",
+          result: failResult("user not authorised to perform that action"),
           schema,
         }),
       ),

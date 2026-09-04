@@ -38,9 +38,9 @@ export type CanvasAssignment = typeof assignmentSchema.Type;
 export const quizSchema = Schema.Struct({
   id: Schema.Number,
   title: Schema.String,
-  due_at: nullableDate,
-  lock_at: nullableDate,
-  unlock_at: nullableDate,
+  due_at: Schema.optional(nullableDate),
+  lock_at: Schema.optional(nullableDate),
+  unlock_at: Schema.optional(nullableDate),
   html_url: Schema.String,
   published: Schema.Boolean,
   locked_for_user: Schema.Boolean,
@@ -55,7 +55,7 @@ export const announcementSchema = Schema.Struct({
   title: Schema.String,
   message: Schema.NullOr(Schema.String),
   posted_at: nullableDate,
-  url: Schema.NullOr(Schema.String),
+  url: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export const announcementListSchema = Schema.Array(announcementSchema);
 export type CanvasAnnouncement = typeof announcementSchema.Type;

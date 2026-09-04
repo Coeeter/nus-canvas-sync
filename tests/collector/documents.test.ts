@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { CanvasFile } from "../../schemas/canvas.schema";
-import { referencedByForFile, selectRelevantFiles } from "../../src/collector/documents";
+import {
+  hasDownloadableUrl,
+  referencedByForFile,
+  selectRelevantFiles,
+} from "../../src/collector/documents";
 import { COURSES } from "../../src/config/courses";
 import { normalizeDocument } from "../../src/normalize/records";
 import type { NormalizedRecord } from "../../src/normalize/types";
@@ -49,5 +53,13 @@ describe("selectRelevantFiles", () => {
 
     expect(document.fields.fileSourceId).toBe(`course:${course.id}:file:1`);
     expect(document.fields.referencedBy).toEqual([source.id]);
+  });
+});
+
+describe("hasDownloadableUrl", () => {
+  test("a future/locked file with a blank url is not downloadable", () => {
+    expect(hasDownloadableUrl(file(1, "future.pdf"))).toBe(true);
+    expect(hasDownloadableUrl({ ...file(1, "future.pdf"), url: "" })).toBe(false);
+    expect(hasDownloadableUrl({ ...file(1, "future.pdf"), url: "   " })).toBe(false);
   });
 });

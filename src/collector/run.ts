@@ -18,7 +18,12 @@ import { type CourseManifestEntry, type RunManifest, summarizeResult } from "../
 import { writeSnapshot } from "../state/snapshot-store";
 import { CanvasClient } from "./canvas";
 import { courseCoverageSucceeded } from "./coverage";
-import { downloadAndExtract, referencedByForFile, selectRelevantFiles } from "./documents";
+import {
+  downloadAndExtract,
+  hasDownloadableUrl,
+  referencedByForFile,
+  selectRelevantFiles,
+} from "./documents";
 import { filterRelevantRepos, GithubClient } from "./github";
 import type { EndpointResult } from "./types";
 
@@ -281,6 +286,7 @@ function collectDocuments(
     );
     const changedIds = new Set(changedRecords.map((record) => record.id));
     const selected = filesResult.right.filter((file) => {
+      if (!hasDownloadableUrl(file)) return false;
       const references = referencedByForFile(file, courseRecords);
       return references.length > 0 || selectRelevantFiles([file], []).length === 1;
     });
