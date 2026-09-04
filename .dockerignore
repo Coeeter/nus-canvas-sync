@@ -1,9 +1,13 @@
 .git
 .github
+.agents
+.claude
+.repos
 .env*
 node_modules
 snapshots
 latest
 data
+skills-lock.json
 *.log
 .DS_Store
