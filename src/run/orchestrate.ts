@@ -35,13 +35,24 @@ export interface SyncDependencies {
 
 export async function runSync(deps: SyncDependencies) {
   const now = deps.now ?? new Date();
+  await logEvent("collection_started", { startedAt: now.toISOString() });
   const collection = await deps.collect();
+  await logEvent("collection_finished", {
+    runId: collection.runId,
+    courses: collection.manifest.courses.map((entry) => ({
+      course: entry.courseCode,
+      outcome: entry.outcome,
+    })),
+  });
   let existing: Awaited<ReturnType<typeof deps.notion.listExistingActions>> = [];
   let notionListError: unknown;
   try {
+    await logEvent("notion_read_started", { runId: collection.runId });
     existing = await deps.notion.listExistingActions();
+    await logEvent("notion_read_finished", { runId: collection.runId, actions: existing.length });
   } catch (error) {
     notionListError = error;
+    await logEvent("notion_read_failed", { runId: collection.runId, detail: safeError(error) });
   }
   const contextDocument = await readFile(join(process.cwd(), "docs/context.md"), "utf8").catch(
     () => "",
@@ -56,6 +67,11 @@ export async function runSync(deps: SyncDependencies) {
 
   for (const entry of collection.manifest.courses) {
     const records = collection.records[entry.courseCode] ?? [];
+    await logEvent("course_started", {
+      runId: collection.runId,
+      course: entry.courseCode,
+      records: records.length,
+    });
     if (entry.outcome === "failed") {
       entry.stages = {
         ai: "skipped",
@@ -67,6 +83,12 @@ export async function runSync(deps: SyncDependencies) {
         course: entry.courseCode,
         stage: "collection",
         detail: `required source coverage failed; last successful sync: ${lastSuccessful.get(entry.courseCode)}`,
+      });
+      await logEvent("course_failed", {
+        runId: collection.runId,
+        course: entry.courseCode,
+        stage: "collection",
+        detail: "required source coverage failed",
       });
       continue;
     }
@@ -82,7 +104,18 @@ export async function runSync(deps: SyncDependencies) {
       const diff = collection.diffs[entry.courseCode];
       const changed = diff ? [...diff.added, ...diff.changed.map((change) => change.after)] : [];
       const input = interpretationInput(entry.courseCode, changed, contextDocument);
+      await logEvent("course_ai_started", {
+        runId: collection.runId,
+        course: entry.courseCode,
+        changedRecords: input.changedRecords.length,
+        referencedDocuments: input.referencedDocuments.length,
+      });
       const candidates = await deps.interpret(input);
+      await logEvent("course_ai_finished", {
+        runId: collection.runId,
+        course: entry.courseCode,
+        candidates: candidates.candidates.length,
+      });
       facts.push(...candidates.candidates.map(candidateToFact));
       const projected = bundleContiguousLectures(
         facts.map((fact) => projectTask(fact, now)),
@@ -92,6 +125,11 @@ export async function runSync(deps: SyncDependencies) {
           existing.some((row) => row.automatedIdentity === task.id),
       );
       const operations = planReconciliation(existing, projected, now.toISOString());
+      await logEvent("course_notion_started", {
+        runId: collection.runId,
+        course: entry.courseCode,
+        operations: operations.length,
+      });
       for (const operation of operations) await deps.notion.applyAndVerify(operation);
       await Effect.runPromise(
         writeBaseline(deps.dataDir, entry.courseCode, records).pipe(
@@ -103,6 +141,11 @@ export async function runSync(deps: SyncDependencies) {
         notion: operations.length ? "success" : "skipped",
         baseline: "advanced",
       };
+      await logEvent("course_finished", {
+        runId: collection.runId,
+        course: entry.courseCode,
+        operations: operations.length,
+      });
     } catch (error) {
       entry.outcome = "failed";
       const detail = safeError(error);
@@ -111,6 +154,12 @@ export async function runSync(deps: SyncDependencies) {
         course: entry.courseCode,
         stage: "pipeline",
         detail: `${detail}; last successful sync: ${lastSuccessful.get(entry.courseCode)}`,
+      });
+      await logEvent("course_failed", {
+        runId: collection.runId,
+        course: entry.courseCode,
+        stage: "pipeline",
+        detail,
       });
     }
   }
@@ -124,9 +173,12 @@ export async function runSync(deps: SyncDependencies) {
     })),
   );
   try {
+    await logEvent("health_update_started", { runId: collection.runId });
     await deps.notion.updateHealthBlock(deps.healthBlockId, health);
+    await logEvent("health_update_finished", { runId: collection.runId });
   } catch (error) {
     failures.push({ course: "SYSTEM", stage: "health", detail: safeError(error) });
+    await logEvent("health_update_failed", { runId: collection.runId, detail: safeError(error) });
   }
 
   let alertFailed = false;
@@ -136,6 +188,7 @@ export async function runSync(deps: SyncDependencies) {
       : health;
   if (failures.length) {
     try {
+      await logEvent("alert_started", { runId: collection.runId, failures: failures.length });
       await deps.alert.send({
         runId: collection.runId,
         runTime: collection.manifest.finishedAt,
@@ -144,9 +197,11 @@ export async function runSync(deps: SyncDependencies) {
         dashboardUrl: deps.dashboardUrl,
       });
       collection.manifest.alert = { status: "success" };
+      await logEvent("alert_finished", { runId: collection.runId });
     } catch (error) {
       alertFailed = true;
       collection.manifest.alert = { status: "failed", detail: safeError(error) };
+      await logEvent("alert_failed", { runId: collection.runId, detail: safeError(error) });
     }
   } else {
     collection.manifest.alert = { status: "skipped" };
@@ -163,6 +218,16 @@ export async function runSync(deps: SyncDependencies) {
     alertFailed,
     collection,
   };
+}
+
+async function logEvent(event: string, fields: Record<string, unknown>) {
+  const effect = event.endsWith("_failed") ? Effect.logError(event) : Effect.logInfo(event);
+  await Effect.runPromise(
+    effect.pipe(
+      Effect.annotateLogs(fields),
+      Effect.withSpan(`nus-sync.${event}`, { attributes: fields }),
+    ),
+  );
 }
 
 function interpretationInput(

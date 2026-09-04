@@ -25,13 +25,15 @@ test("redacts credentials and bounds Codex stderr", () => {
   const stderr =
     "Bearer secret-token https://example.test/a?token=canvas-secret&verifier=canvas-verifier " +
     "x".repeat(1_000);
-  const sanitized = sanitizeStderr(stderr, 100);
+  const redacted = sanitizeStderr(stderr);
+  const bounded = sanitizeStderr(stderr, 100);
 
-  expect(sanitized).not.toContain("secret-token");
-  expect(sanitized).not.toContain("canvas-secret");
-  expect(sanitized).not.toContain("canvas-verifier");
-  expect(sanitized).toContain("Bearer [REDACTED]");
-  expect(sanitized.endsWith("... [truncated]")).toBe(true);
+  expect(redacted).not.toContain("secret-token");
+  expect(redacted).not.toContain("canvas-secret");
+  expect(redacted).not.toContain("canvas-verifier");
+  expect(redacted).toContain("Bearer [REDACTED]");
+  expect(bounded.startsWith("[truncated] ...")).toBe(true);
+  expect(bounded.endsWith("x".repeat(100))).toBe(true);
 });
 
 test("does not invoke Codex when there is no semantic change", async () => {

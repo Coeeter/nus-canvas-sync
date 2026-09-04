@@ -54,7 +54,7 @@ export function sanitizeStderr(text: string, maxLength = STDERR_DETAIL_LIMIT): s
     .replace(/Bearer\s+[A-Za-z0-9\-_.~+/]+=*/gi, "Bearer [REDACTED]")
     .replace(/([?&][\w.-]*(?:token|key|verifier)[\w.-]*=)[^&\s]+/gi, "$1[REDACTED]");
   const trimmed = redacted.trim();
-  return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength)}... [truncated]` : trimmed;
+  return trimmed.length > maxLength ? `[truncated] ...${trimmed.slice(-maxLength)}` : trimmed;
 }
 
 export class CodexCliExecutor implements CodexExecutor {

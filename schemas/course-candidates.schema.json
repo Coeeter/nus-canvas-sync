@@ -16,6 +16,9 @@
           "kind",
           "title",
           "requiredAction",
+          "availableFrom",
+          "dueAt",
+          "eventEndsAt",
           "confidence",
           "ambiguity"
         ],
