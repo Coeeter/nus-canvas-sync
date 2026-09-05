@@ -1,5 +1,6 @@
-import { Effect, FileSystem, Path, Predicate, Schema, Stream } from "effect";
+import { Effect, FileSystem, Path, Predicate, Result, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { TaskAffectingFailureError } from "../errors";
 import type { CourseInterpretationInput } from "./input";
 import { buildCoursePrompt } from "./input";
 import type { CandidateEnvelope } from "./types";
@@ -123,27 +124,37 @@ export const interpretCourse = Effect.fn("interpretCourse")(function* (
   const schemaPath = path.join(directory, "schema.json");
   const outputPath = path.join(directory, "output.json");
   yield* fs.writeFileString(schemaPath, schema, { mode: 0o600 });
-  const prompt = buildCoursePrompt(input, instructions);
+  const basePrompt = buildCoursePrompt(input, instructions);
   const allowed = new Set(
     [...input.changedRecords, ...input.referencedDocuments].map((record) => record.id),
   );
 
-  return yield* Effect.gen(function* () {
-    yield* executor
-      .execute(prompt, schemaPath, outputPath, directory)
-      .pipe(Effect.timeout("5 minutes"));
-    const encoded = yield* fs.readFileString(outputPath);
-    const raw = yield* Schema.decodeUnknownEffect(JsonValue)(encoded);
-    return yield* Effect.try({
-      try: () =>
-        validateCandidates(raw, input.courseCode, allowed, [
-          ...input.changedRecords,
-          ...input.referencedDocuments,
-        ]),
-      catch: (cause) => cause,
-    });
-  }).pipe(
-    Effect.retry({ times: 1 }),
-    Effect.withSpan("nus-sync.ai.interpret", { attributes: { course: input.courseCode } }),
-  );
+  let feedback = "";
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const prompt = feedback
+      ? `${basePrompt}\n\nYour previous output was rejected: ${feedback}. Return a corrected complete output. Do not repeat unsupported or non-verbatim evidence.`
+      : basePrompt;
+    const result = yield* Effect.gen(function* () {
+      yield* executor
+        .execute(prompt, schemaPath, outputPath, directory)
+        .pipe(Effect.timeout("5 minutes"));
+      const encoded = yield* fs.readFileString(outputPath);
+      const raw = yield* Schema.decodeUnknownEffect(JsonValue)(encoded);
+      return yield* Effect.try({
+        try: () =>
+          validateCandidates(raw, input.courseCode, allowed, [
+            ...input.changedRecords,
+            ...input.referencedDocuments,
+          ]),
+        catch: (cause) => cause,
+      });
+    }).pipe(Effect.result);
+    if (Result.isSuccess(result)) return result.success;
+    if (attempt === 1) return yield* Effect.fail(result.failure);
+    feedback =
+      result.failure instanceof TaskAffectingFailureError
+        ? result.failure.message
+        : "the output could not be decoded or validated";
+  }
+  return yield* Effect.die("unreachable interpretation retry state");
 }, Effect.scoped);

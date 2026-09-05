@@ -1,0 +1,142 @@
+[
+  {
+    "pageId": "3bd703fb-987d-8100-8ca3-d82fdcba5051",
+    "fromIdentity": "quiz-attempt-1",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-8114-b532-efd00d0f2002",
+    "fromIdentity": "pe2-2026-11-07",
+    "disposition": "preserve"
+  },
+  {
+    "pageId": "3bd703fb-987d-8117-8311-c6f1ceea4313",
+    "fromIdentity": "pe1-2026-10-03",
+    "disposition": "preserve"
+  },
+  {
+    "pageId": "3bd703fb-987d-8121-a3ac-ffd5d6f4c477",
+    "fromIdentity": "final-date-review",
+    "disposition": "preserve"
+  },
+  {
+    "pageId": "3bd703fb-987d-81cb-8487-ccc0fbc824a7",
+    "fromIdentity": "quiz-attempt-2",
+    "disposition": "preserve"
+  },
+  {
+    "pageId": "3bd703fb-987d-81e9-bbdd-d8bfca913852",
+    "fromIdentity": "midterm-2026-09-28",
+    "toIdentity": "course:93698:assignment:264898"
+  },
+  {
+    "pageId": "3cf703fb-987d-81c8-9d44-d8e2ae69e4fc",
+    "fromIdentity": "course:93698:document:9900386",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3cd703fb-987d-8149-9c9d-c5208f5c3a3a",
+    "fromIdentity": "course:94257:announcement:485604",
+    "toIdentity": "candidate:GEA1000:1b58b9041825fa026c56"
+  },
+  {
+    "pageId": "3cd703fb-987d-816b-b8bc-e7a63941c84d",
+    "fromIdentity": "candidate:GEA1000:5073a9889e55cb8e8552",
+    "disposition": "preserve"
+  },
+  {
+    "pageId": "3c6703fb-987d-817d-b3ad-ee82f9c4bc5e",
+    "fromIdentity": "course:94257:announcement:481086",
+    "toIdentity": "candidate:GEA1000:349d0eecace88bdba265"
+  },
+  {
+    "pageId": "3c3703fb-987d-8119-8138-ed7f43695127",
+    "fromIdentity": "bundle:GEA1000:b0b943b0a056c60f",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3d0703fb-987d-81ab-98f3-c5adeccbf713",
+    "fromIdentity": "course:94548:announcement:482225:individual-assignment",
+    "toIdentity": "candidate:GESS1001:95502d12e2861b665a1d"
+  },
+  {
+    "pageId": "3d0703fb-987d-811b-91d5-f047aad3af84",
+    "fromIdentity": "course:94548:announcement:486744",
+    "toIdentity": "candidate:GESS1001:b88e66687e28919508a4"
+  },
+  {
+    "pageId": "3c7703fb-987d-8117-a05a-d30aa57f6216",
+    "fromIdentity": "course:94548:announcement:482225",
+    "toIdentity": "candidate:GESS1001:937ce3c2adbaa4e780ca"
+  },
+  {
+    "pageId": "3bd703fb-987d-813b-8955-fa4a1c32ed3b",
+    "fromIdentity": "474477-review",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-8159-bb31-fdc61771443e",
+    "fromIdentity": "472286-test",
+    "toIdentity": "candidate:GESS1001:eecaac6830ecfc35021b"
+  },
+  {
+    "pageId": "3c3703fb-987d-815f-a2ef-cf290badbe70",
+    "fromIdentity": "bundle:GESS1001:ebfc3a7b6f5725b9",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-8120-898e-ca6006de2f46",
+    "fromIdentity": "quiz-7",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-8132-bf33-ecbcb1a21b05",
+    "fromIdentity": "quiz-4",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-813f-902e-db3986441143",
+    "fromIdentity": "quiz-3",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-814d-8d81-f49c25075c4d",
+    "fromIdentity": "quiz-8",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-8153-821e-c5aa1f4b3754",
+    "fromIdentity": "quiz-5",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-8165-a3b9-db6c8037196f",
+    "fromIdentity": "project-report",
+    "toIdentity": "candidate:IS1128:fc999b42cefe9e9fc96c"
+  },
+  {
+    "pageId": "3bd703fb-987d-818c-9e34-d12587d7ce23",
+    "fromIdentity": "project-presentation",
+    "toIdentity": "candidate:IS1128:ad36f8277a8a470267c3"
+  },
+  {
+    "pageId": "3bd703fb-987d-81b4-986a-c637cc0d2446",
+    "fromIdentity": "in-class-test",
+    "disposition": "preserve"
+  },
+  {
+    "pageId": "3bd703fb-987d-81fd-b91c-d556dd913dcb",
+    "fromIdentity": "quiz-6",
+    "disposition": "retire"
+  },
+  {
+    "pageId": "3bd703fb-987d-8128-9252-c359e1d6c8ca",
+    "fromIdentity": "final-2026-11-27",
+    "toIdentity": "candidate:MA1301:a79c19420851e66c0231"
+  },
+  {
+    "pageId": "3bd703fb-987d-8183-b192-c97ef3be6761",
+    "fromIdentity": "midterm-2026-10-08",
+    "toIdentity": "candidate:MA1301:5e7a966bc7d7870a91f8"
+  }
+]

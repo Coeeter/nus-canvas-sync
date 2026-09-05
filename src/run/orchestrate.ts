@@ -199,44 +199,66 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
           ? freshCandidates
           : mergeCandidateEnvelopes(previousCandidates, freshCandidates, affectedSourceIds);
       state.candidates = candidates;
-      const { projected, operations } = yield* Effect.try(() => {
-        const facts = applyCourseSchedule(
-          applyTaskDependencies(
-            restoreUserDecisions(
-              mergeCandidateFacts(factsFromRecords(records), candidates.candidates),
-              existing,
-              records,
-              state,
+      const { projected, operations } = yield* Effect.try({
+        try: () => {
+          const facts = applyCourseSchedule(
+            applyTaskDependencies(
+              restoreUserDecisions(
+                mergeCandidateFacts(factsFromRecords(records), candidates.candidates),
+                existing,
+                records,
+                state,
+              ),
             ),
-          ),
-        );
-        const projected = selectTrackedTasks(
-          bundleContiguousLectures(
-            facts.map((fact) => projectTask(fact, nowDate)),
-            existing,
-          ).map((task) => planDates(task, nowDate, records)),
-          existing,
-        );
-        const unclaimed = existing.filter(
-          (row) =>
-            row.automatedIdentity &&
-            row.properties.Course === entry.courseCode &&
-            !["Done", "Dropped"].includes(String(row.properties.Status)) &&
-            !state.managed[row.automatedIdentity] &&
-            !projected.some(
-              (task) =>
-                findExistingAction(existing, task.id, task.sourceIds, task.title)?.id === row.id,
-            ),
-        );
-        if (unclaimed.length)
-          throw new Error(
-            `Unmapped active history requires explicit migration before this course can sync: ${unclaimed.map((row) => row.id).join(", ")}`,
           );
-        const operations = [
-          ...planReconciliation(existing, projected, nowIso),
-          ...reconcileMissing(state, projected, records, existing),
-        ];
-        return { projected, operations };
+          const projected = selectTrackedTasks(
+            bundleContiguousLectures(
+              facts.map((fact) => projectTask(fact, nowDate)),
+              existing,
+            ).map((task) => planDates(task, nowDate, records)),
+            existing,
+          );
+          const unclaimed = existing.filter(
+            (row) =>
+              row.automatedIdentity &&
+              row.properties.Course === entry.courseCode &&
+              !row.migrationDisposition &&
+              !["Done", "Dropped"].includes(String(row.properties.Status)) &&
+              !state.managed[row.automatedIdentity] &&
+              !projected.some(
+                (task) =>
+                  findExistingAction(existing, task.id, task.sourceIds, task.title)?.id === row.id,
+              ),
+          );
+          if (unclaimed.length)
+            throw new Error(
+              `Unmapped active history requires explicit migration before this course can sync: ${unclaimed.map((row) => row.id).join(", ")}`,
+            );
+          const migrationOperations: Array<ReconcileOperation> = existing
+            .filter(
+              (row) =>
+                row.migrationDisposition === "retire" &&
+                row.properties.Course === entry.courseCode &&
+                row.automatedIdentity &&
+                !row.archived,
+            )
+            .map((row) => ({
+              type: "update",
+              pageId: row.id,
+              identity: row.automatedIdentity!,
+              expectedIdentity: row.automatedIdentity!,
+              expectedProperties: row.properties,
+              archived: true,
+              properties: {},
+            }));
+          const operations = [
+            ...migrationOperations,
+            ...planReconciliation(existing, projected, nowIso),
+            ...reconcileMissing(state, projected, records, existing),
+          ];
+          return { projected, operations };
+        },
+        catch: (cause) => cause,
       });
       yield* logEvent("course_notion_started", {
         runId: collection.runId,

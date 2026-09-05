@@ -223,8 +223,15 @@ export const collectCourse = Effect.fn("collectCourse")(function* (
   const discoverPages = (value: unknown) => {
     for (const match of JSON.stringify(value).matchAll(
       new RegExp(`/courses/${course.id}/pages/([a-zA-Z0-9_%.-]+)`, "g"),
-    ))
-      pageUrls.add(decodeURIComponent(match[1]!));
+    )) {
+      let slug = match[1]!;
+      try {
+        slug = decodeURIComponent(slug);
+      } catch {
+        // Fetch the literal slug so a malformed link becomes a recorded endpoint failure.
+      }
+      pageUrls.add(slug);
+    }
   };
   if (Result.isSuccess(frontPage)) discoverPages(frontPage.success);
   if (Result.isSuccess(announcements)) discoverPages(announcements.success);
@@ -255,8 +262,16 @@ export const collectCourse = Effect.fn("collectCourse")(function* (
   const discovery = [assignments, announcements, modules, frontPage, ...pageBodies].flatMap(
     (result) => (result._tag === "Success" ? [result.success as unknown] : []),
   );
-  for (const match of JSON.stringify(discovery).matchAll(/\/files\/(\d+)/g))
-    fileIds.add(Number(match[1]));
+  const serializedDiscovery = JSON.stringify(discovery);
+  const foreignFileIds = new Set(
+    [...serializedDiscovery.matchAll(/\/courses\/(\d+)\/files\/(\d+)/g)]
+      .filter((match) => Number(match[1]) !== course.id)
+      .map((match) => Number(match[2])),
+  );
+  for (const match of serializedDiscovery.matchAll(/\/files\/(\d+)/g)) {
+    const id = Number(match[1]);
+    if (!foreignFileIds.has(id)) fileIds.add(id);
+  }
   if (Result.isSuccess(modules))
     for (const module of modules.success) {
       for (const item of module.items ?? [])
@@ -367,7 +382,7 @@ const collectDocuments = Effect.fn("collectDocuments")(function* (
   );
   const changedIds = new Set(changedRecords.map((record) => record.id));
   const selected = filesResult.success.filter((file) => {
-    if (!hasDownloadableUrl(file) || !isExtractableDocument(file)) return false;
+    if (!isExtractableDocument(file)) return false;
     const references = referencedByForFile(file, courseRecords);
     return references.length > 0 || selectRelevantFiles([file], []).length === 1;
   });
@@ -376,6 +391,16 @@ const collectDocuments = Effect.fn("collectDocuments")(function* (
   const destDir = `${dataDir}/documents/${course.code}`;
   const downloaded = yield* Effect.all(
     selected.map((file) => {
+      if (file.locked_for_user === true) return Effect.result(Effect.succeed({ text: null }));
+      if (!hasDownloadableUrl(file))
+        return Effect.result(
+          Effect.fail(
+            new TaskAffectingFailureError({
+              command: `download file ${file.id}`,
+              message: "Required document has no downloadable URL; source coverage is incomplete",
+            }),
+          ),
+        );
       const documentId = `course:${course.id}:document:${file.id}`;
       const cached = baselineDocuments.get(documentId);
       const fileChanged = changedIds.has(`course:${course.id}:file:${file.id}`);
@@ -402,6 +427,21 @@ const collectDocuments = Effect.fn("collectDocuments")(function* (
     if (!file) continue;
     outcomes[`document:${file.id}`] = summarizeResult(result);
     if (Result.isSuccess(result)) {
+      if (file.locked_for_user === true) {
+        const record = normalizeDocument(
+          course,
+          file,
+          "",
+          referencedByForFile(file, courseRecords),
+        );
+        record.fields.lockedForUser = true;
+        outcomes[`document:${file.id}`] = {
+          status: "ok",
+          detail: "Canvas confirms locked content; extraction deferred",
+        };
+        documentRecords.push(record);
+        continue;
+      }
       if (!result.success.text?.trim()) {
         outcomes[`document:${file.id}`] = {
           status: "TaskAffectingFailureError",

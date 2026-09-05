@@ -31,6 +31,7 @@ export function restoreUserDecisions(
   // be adopted without guessing from labels during the state-format migration.
   for (const row of existing) {
     if (
+      row.migrationDisposition === "retire" ||
       !row.automatedIdentity?.startsWith(`bundle:${records[0]?.courseCode}:`) ||
       state.managed[row.automatedIdentity]
     )
@@ -52,7 +53,12 @@ export function restoreUserDecisions(
   for (const row of [...existing].sort((left, right) =>
     (left.editedAt ?? "").localeCompare(right.editedAt ?? ""),
   )) {
-    if (!row.automatedIdentity || row.properties.Course !== records[0]?.courseCode) continue;
+    if (
+      row.migrationDisposition === "retire" ||
+      !row.automatedIdentity ||
+      row.properties.Course !== records[0]?.courseCode
+    )
+      continue;
     const members = String(row.properties["Parent Canvas ID"] ?? "")
       .split("\n")
       .filter((id) => /^course:\d+:module:\d+:item:\d+$/.test(id));

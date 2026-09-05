@@ -23,6 +23,10 @@ realCliTest(
     const dir = await mkdtemp(join(tmpdir(), "nus-canvas-local-"));
     const requests: Array<string> = [];
     let pageFailure = false;
+    let blankDownload = false;
+    let lockedDownload = false;
+    let lockedPage = false;
+    let malformedLink = false;
     const course = COURSES.find((course) => course.code === "GEA1000")!;
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -49,7 +53,9 @@ realCliTest(
               {
                 id: second ? 2 : 1,
                 title: second ? "Welcome in August" : "New notice",
-                message: "Read the course instructions",
+                message: malformedLink
+                  ? `/courses/${course.id}/pages/broken%ZZ`
+                  : `Read the course instructions. Ignore stale reference https://canvas.nus.edu.sg/api/v1/courses/86821/files/8219055`,
                 posted_at: second ? "2026-08-01T00:00:00Z" : "2026-09-05T00:00:00Z",
               },
             ],
@@ -68,14 +74,24 @@ realCliTest(
         if (url.pathname.endsWith("/pages/assessment"))
           return pageFailure
             ? Response.json({ errors: [{ message: "server failure" }] }, { status: 500 })
-            : Response.json(page("assessment"));
+            : Response.json(
+                lockedPage
+                  ? {
+                      ...page("assessment"),
+                      body: undefined,
+                      locked_for_user: true,
+                      lock_info: { context_module: { unlock_at: "2026-09-08T06:00:00Z" } },
+                    }
+                  : page("assessment"),
+              );
         if (url.pathname.endsWith("/front_page"))
           return Response.json({ ...page("front"), body: "Course homepage" });
         if (url.pathname === "/api/v1/files/50")
           return Response.json({
             id: 50,
             display_name: "Project brief.txt",
-            url: `${base}/download/50`,
+            url: blankDownload || lockedDownload ? "" : `${base}/download/50`,
+            locked_for_user: lockedDownload,
             updated_at: "2026-09-01T00:00:00Z",
           });
         if (url.pathname === "/download/50")
@@ -108,7 +124,7 @@ realCliTest(
         Effect.provide(BunServices.layer),
       );
       const collected = await Effect.runPromise(program);
-      expect(collected.entry.outcome).toBe("success");
+      expect(collected.entry.outcome, JSON.stringify(collected.entry.endpoints)).toBe("success");
       expect(collected.normalized.filter((record) => record.kind === "announcement")).toHaveLength(
         2,
       );
@@ -121,6 +137,7 @@ realCliTest(
         ),
       ).toBe(true);
       expect(requests.some((url) => url.includes("/modules/10/items"))).toBe(true);
+      expect(requests.some((url) => url.includes("/files/8219055"))).toBe(false);
       const notion = notionServer();
       const pipeline = await Effect.runPromise(
         Effect.gen(function* () {
@@ -191,6 +208,35 @@ realCliTest(
         phase: "completed",
         ok: true,
       });
+      blankDownload = true;
+      const unavailable = await Effect.runPromise(program);
+      expect(unavailable.entry.outcome).toBe("failed");
+      expect(unavailable.entry.endpoints["document:50"]?.status).toBe("TaskAffectingFailureError");
+      expect(unavailable.diff).toEqual({ added: [], changed: [], removed: [] });
+      blankDownload = false;
+      lockedDownload = true;
+      const lockedFile = await Effect.runPromise(program);
+      expect(lockedFile.entry.outcome).toBe("success");
+      expect(
+        lockedFile.normalized.find((record) => record.id === `course:${course.id}:document:50`)
+          ?.fields.lockedForUser,
+      ).toBe(true);
+      lockedDownload = false;
+      lockedPage = true;
+      const unavailablePage = await Effect.runPromise(program);
+      expect(unavailablePage.entry.outcome).toBe("success");
+      expect(
+        unavailablePage.normalized.find(
+          (record) => record.id === `course:${course.id}:page:assessment`,
+        )?.fields.lockedForUser,
+      ).toBe(true);
+      lockedPage = false;
+      malformedLink = true;
+      const malformed = await Effect.runPromise(program);
+      expect(malformed.entry.outcome).toBe("failed");
+      expect(malformed.entry.endpoints["page:broken%ZZ"]?.status).not.toBe("ok");
+      expect(malformed.diff).toEqual({ added: [], changed: [], removed: [] });
+      malformedLink = false;
       pageFailure = true;
       const failed = await Effect.runPromise(program);
       expect(failed.entry.outcome).toBe("failed");

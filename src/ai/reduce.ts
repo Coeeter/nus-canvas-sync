@@ -4,13 +4,15 @@ import type { CourseCandidate } from "./types";
 
 export function candidateIdentity(candidate: CourseCandidate): string {
   if (candidate.identity) return candidate.identity;
-  const key = JSON.stringify({
-    sources: candidate.sourceIds.slice().sort(),
-    kind: candidate.kind,
-    ...(candidate.actionKey
-      ? { action: candidate.actionKey }
-      : { title: candidate.title.trim().toLowerCase().replace(/\s+/g, " ") }),
-  });
+  const key = JSON.stringify(
+    candidate.actionKey
+      ? { kind: candidate.kind, action: candidate.actionKey }
+      : {
+          sources: candidate.sourceIds.slice().sort(),
+          kind: candidate.kind,
+          title: candidate.title.trim().toLowerCase().replace(/\s+/g, " "),
+        },
+  );
   return `candidate:${candidate.courseCode}:${createHash("sha256").update(key).digest("hex").slice(0, 20)}`;
 }
 
@@ -63,8 +65,12 @@ export function mergeCandidateFacts(
       continue;
     // Shared documents are provenance, not action identity. Only a dedicated
     // assessment or a matching deterministic preparation can absorb enrichment.
+    const sameMaPreparation =
+      candidate.courseCode === "MA1301" &&
+      candidate.kind === "preparation" &&
+      overlaps.some((fact) => fact.kind === "preparation" && candidate.sourceIds.includes(fact.id));
     const matches =
-      candidate.relationship === "action"
+      candidate.relationship === "action" && !sameMaPreparation
         ? []
         : overlaps.filter(
             (fact) =>

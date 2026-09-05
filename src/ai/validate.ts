@@ -31,6 +31,14 @@ export const CandidateEnvelopeSchema = Schema.Struct({
   ),
 });
 const decodeCandidateEnvelope = Schema.decodeUnknownSync(CandidateEnvelopeSchema);
+const normalizeEvidence = (value: string) =>
+  value
+    .replace(/<\/?[A-Za-z][^>]*>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/\\[nr]|\s+/g, " ")
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .trim()
+    .toLowerCase();
 
 export function validateCandidates(
   raw: unknown,
@@ -49,6 +57,12 @@ export function validateCandidates(
     if (keys.has(key)) throw invalid("duplicate candidate action identity");
     keys.add(key);
     if (records && candidate.identity) throw invalid("model may not assign persisted identities");
+    if (candidate.courseCode !== courseCode) {
+      throw invalid("candidate crossed the one-course boundary");
+    }
+    if (candidate.sourceIds.some((id) => !allowedSourceIds.has(id))) {
+      throw invalid("candidate cites an unavailable source identity");
+    }
     if (
       [candidate.availableFrom, candidate.dueAt, candidate.eventEndsAt].some(
         (value) => value != null && !validSourceDate(value),
@@ -56,27 +70,23 @@ export function validateCandidates(
     )
       throw invalid("candidate contains an invalid date");
     if (records) {
-      const text = candidate.sourceIds
-        .flatMap((id) =>
-          records
-            .filter((record) => record.id === id)
-            .map((record) => JSON.stringify(record.fields)),
-        )
-        .join(" ");
-      const normalize = (value: string) =>
-        value
-          .replace(/<[^>]*>/g, " ")
-          .replace(/\\[nr]|\s+/g, " ")
-          .trim()
-          .toLowerCase();
-      if (!normalize(text).includes(normalize(candidate.evidence)))
+      const cited = candidate.sourceIds.flatMap((id) =>
+        records.filter((record) => record.id === id),
+      );
+      const evidence = normalizeEvidence(candidate.evidence);
+      const evidenced = cited.filter((record) =>
+        normalizeEvidence(JSON.stringify(record.fields)).includes(evidence),
+      );
+      if (evidenced.length === 0)
         throw invalid("candidate evidence is not a verbatim excerpt of its cited sources");
-    }
-    if (candidate.courseCode !== courseCode) {
-      throw invalid("candidate crossed the one-course boundary");
-    }
-    if (candidate.sourceIds.some((id) => !allowedSourceIds.has(id))) {
-      throw invalid("candidate cites an unavailable source identity");
+      if (
+        candidate.kind === "assessment" &&
+        candidate.relationship === "action" &&
+        evidenced.every((record) => record.kind === "assignment" || record.kind === "quiz")
+      )
+        throw invalid(
+          "a candidate evidenced only by its dedicated assessment must use relationship=enrichment",
+        );
     }
     if (
       typeof candidate.confidence !== "number" ||

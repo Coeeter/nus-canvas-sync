@@ -25,12 +25,14 @@ export function selectRelevantFiles(
 ): Array<CanvasFile> {
   return files.filter((file) => {
     if (RECOGNISABLE_FILENAME.test(file.display_name)) return true;
-    const nameWithoutExtension = file.display_name.replace(/\.[^.]+$/, "").toLowerCase();
+    const filename = file.display_name.toLowerCase();
+    const stem = filename.replace(/\.[^.]+$/, "");
     return changedProse.some(
       (prose) =>
         prose.includes(`/files/${file.id}`) ||
-        prose.includes(file.url) ||
-        prose.toLowerCase().includes(nameWithoutExtension),
+        (file.url.trim() !== "" && prose.includes(file.url)) ||
+        prose.toLowerCase().includes(filename) ||
+        (/\s/.test(stem) && prose.toLowerCase().includes(stem)),
     );
   });
 }
@@ -48,7 +50,8 @@ export function referencedByForFile(
   file: CanvasFile,
   records: ReadonlyArray<NormalizedRecord>,
 ): Array<string> {
-  const nameWithoutExtension = file.display_name.replace(/\.[^.]+$/, "").toLowerCase();
+  const filename = file.display_name.toLowerCase();
+  const stem = filename.replace(/\.[^.]+$/, "");
   return records
     .filter((record) => {
       const value = JSON.stringify(record.fields);
@@ -57,7 +60,8 @@ export function referencedByForFile(
         (file.url.trim() !== "" && value.includes(sanitizeSourceText(file.url))) ||
         (record.kind === "module" && value.includes(`"contentId":${file.id}`)) ||
         ((record.kind === "announcement" || record.kind === "assignment") &&
-          value.toLowerCase().includes(nameWithoutExtension))
+          (value.toLowerCase().includes(filename) ||
+            (/\s/.test(stem) && value.toLowerCase().includes(stem))))
       );
     })
     .map((record) => record.id)

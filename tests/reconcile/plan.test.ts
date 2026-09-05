@@ -184,3 +184,92 @@ test("new rows are limited to ready or review work while existing history is ret
     ),
   ).toEqual([ready, locked]);
 });
+
+test("a retired legacy source row does not block its corrected replacement", () => {
+  const projection = projectTask(
+    {
+      id: "candidate:CS2030S:new-problem-set",
+      courseCode: "CS2030S",
+      kind: "preparation",
+      title: "Prepare Problem Set 3",
+      sourceIds: ["course:93698:document:9900386"],
+      observed: true,
+      authoritativeAction: true,
+    },
+    new Date("2026-09-05T00:00:00Z"),
+  );
+
+  expect(
+    planReconciliation(
+      [
+        {
+          id: "obsolete",
+          automatedIdentity: "course:93698:document:9900386",
+          migrationDisposition: "retire",
+          properties: { Course: "CS2030S", Status: "Dropped" },
+        },
+      ],
+      [projection],
+      "2026-09-05T00:00:00Z",
+    ),
+  ).toEqual([expect.objectContaining({ type: "create", identity: projection.id })]);
+});
+
+test("a retired page is never reused when its obsolete identity is projected again", () => {
+  const projection = projectTask(
+    {
+      id: "course:93698:document:9900386",
+      courseCode: "CS2030S",
+      kind: "preparation",
+      title: "Prepare the corrected problem set",
+      sourceIds: ["course:93698:document:9900386"],
+      observed: true,
+      authoritativeAction: true,
+    },
+    new Date("2026-09-05T00:00:00Z"),
+  );
+
+  expect(
+    planReconciliation(
+      [
+        {
+          id: "obsolete",
+          automatedIdentity: projection.id,
+          migrationDisposition: "retire",
+          properties: { Course: "CS2030S", Status: "Dropped" },
+        },
+      ],
+      [projection],
+      "2026-09-05T00:00:00Z",
+    ),
+  ).toEqual([expect.objectContaining({ type: "create", identity: projection.id })]);
+});
+
+test("terminal legacy history does not claim a different candidate sharing one source", () => {
+  const projection = projectTask(
+    {
+      id: "candidate:CS2030S:problem-set-3",
+      courseCode: "CS2030S",
+      kind: "preparation",
+      title: "Prepare Problem Set 3",
+      sourceIds: ["course:93698:document:9900386", "course:93698:page:cs2030s-schedule"],
+      observed: true,
+      authoritativeAction: true,
+    },
+    new Date("2026-09-05T00:00:00Z"),
+  );
+
+  expect(
+    planReconciliation(
+      [
+        {
+          id: "old-lecture",
+          automatedIdentity: "cs2030s-schedule-week-03-units-13-19",
+          properties: { Course: "CS2030S", Status: "Done" },
+        },
+      ],
+      [projection],
+      "2026-09-05T00:00:00Z",
+    ),
+  ).toEqual([expect.objectContaining({ type: "create", identity: projection.id })]);
+});

@@ -15,6 +15,7 @@ Rules:
 
 - Give every candidate a stable actionKey naming the source's actual deliverable or stage. Dates, wording changes and additional supporting sources must not change that key. Distinct stages (proposal, slides, peer assessment) must not share a key.
 - evidence must be one verbatim excerpt from a cited source, not a paraphrase. Put your explanation in requiredAction and uncertainty in ambiguity.
+- Copy evidence as one contiguous excerpt, preserving its exact words and punctuation. Course context and user preferences tell you what to look for but are never evidence. Do not turn a general preference into a source requirement; for example, emit recitation preparation only when the cited current source itself requires it.
 - Include every distinct mandatory stage in a shared brief, not just the first deadline. Include concrete assigned questions/readings in requiredAction. Preserve source exceptions to tutorial preparation.
 - CS2030S labs are physical work whose Canvas rows receive grades; Nas does not want separate lab tasks. Recitation problem sets are advance preparation. GEA1000 online lectures must be completed weekly, including weeks without a physical tutorial. MA1301 preparation precedes physical lectures; its physical quiz and Canvas upload form one assessment. IS1128 ordinary physical lectures do not imply a recurring preparation task.
 

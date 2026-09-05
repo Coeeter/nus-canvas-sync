@@ -101,6 +101,7 @@ function cs2030sProblemSetFacts(records: ReadonlyArray<NormalizedRecord>): Array
           authoritativeAction: true,
           workMode: "Before class" as const,
           instructions: String(record.fields.text ?? ""),
+          lockedForUser: record.fields.lockedForUser === true,
           ...(problemSet <= 4
             ? { week: problemSet + 2 }
             : {

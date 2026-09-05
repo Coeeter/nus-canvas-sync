@@ -26,6 +26,7 @@ export interface ExistingAction {
   properties: Record<string, unknown>;
   archived?: boolean;
   editedAt?: string;
+  migrationDisposition?: "retire" | "preserve";
 }
 
 export type ReconcileOperation = (
@@ -57,6 +58,8 @@ export function planReconciliation(
       const collision = existing.find(
         (row) =>
           row.automatedIdentity &&
+          row.migrationDisposition !== "retire" &&
+          !["Done", "Dropped"].includes(String(row.properties.Status)) &&
           row.properties.Course === projection.courseCode &&
           !row.automatedIdentity.startsWith("candidate:") &&
           projection.sourceIds.some(
@@ -130,7 +133,12 @@ export function findExistingAction(
   _title?: string,
   excludedPageIds: ReadonlySet<string> = new Set(),
 ) {
-  const available = existing.filter((row) => !excludedPageIds.has(row.id) && row.automatedIdentity);
+  const available = existing.filter(
+    (row) =>
+      !excludedPageIds.has(row.id) &&
+      row.automatedIdentity &&
+      row.migrationDisposition !== "retire",
+  );
   const exact = available.filter((row) => row.automatedIdentity === identity);
   if (exact.length > 1) throw new Error(`Duplicate automated identity: ${identity}`);
   if (exact[0]) return exact[0];

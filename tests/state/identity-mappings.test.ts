@@ -58,3 +58,38 @@ test("explicit scoped legacy mapping updates the same page with its original own
     ),
   ).toThrow("ownership changed");
 });
+
+test("explicit retirement and preservation dispositions remain scoped to their exact pages", () => {
+  const rows = [
+    {
+      id: "obsolete",
+      automatedIdentity: "old-attendance",
+      properties: { Course: "GESS1001", "Canvas Item ID": "old-attendance", Status: "Not started" },
+    },
+    {
+      id: "future",
+      automatedIdentity: "future-exam",
+      properties: { Course: "CS2030S", "Canvas Item ID": "future-exam", Status: "Not started" },
+    },
+  ];
+
+  expect(
+    applyIdentityMappings(rows, [
+      { pageId: "obsolete", fromIdentity: "old-attendance", disposition: "retire" },
+      { pageId: "future", fromIdentity: "future-exam", disposition: "preserve" },
+    ]),
+  ).toEqual([
+    expect.objectContaining({ id: "obsolete", migrationDisposition: "retire" }),
+    expect.objectContaining({ id: "future", migrationDisposition: "preserve" }),
+  ]);
+  expect(
+    applyIdentityMappings(
+      [],
+      [
+        { pageId: "obsolete", fromIdentity: "old-attendance", disposition: "retire" },
+        { pageId: "future", fromIdentity: "future-exam", disposition: "preserve" },
+        { pageId: "mapped", fromIdentity: "old", toIdentity: "candidate:CS2030S:new" },
+      ],
+    ),
+  ).toEqual([]);
+});

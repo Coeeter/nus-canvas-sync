@@ -61,10 +61,12 @@ test("does not invoke Codex when there is no semantic change", async () => {
 
 test("retries once and rejects unsupported provenance", async () => {
   let calls = 0;
+  const prompts: Array<string> = [];
   const executor: CodexExecutor = {
-    execute: (_prompt, _schema, output) =>
+    execute: (prompt, _schema, output) =>
       Effect.sync(() => {
         calls += 1;
+        prompts.push(prompt);
         const sourceIds = calls === 1 ? ["invented"] : [record.id];
         writeFileSync(
           output,
@@ -102,5 +104,6 @@ test("retries once and rejects unsupported provenance", async () => {
     ).pipe(Effect.provide(BunServices.layer)),
   );
   expect(calls).toBe(2);
+  expect(prompts[1]).toContain("candidate cites an unavailable source identity");
   expect(result.candidates[0]?.sourceIds).toEqual([record.id]);
 });
