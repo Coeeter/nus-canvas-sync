@@ -129,11 +129,17 @@ export const interpretCourse = Effect.fn("interpretCourse")(function* (
   );
 
   return yield* Effect.gen(function* () {
-    yield* executor.execute(prompt, schemaPath, outputPath, directory);
+    yield* executor
+      .execute(prompt, schemaPath, outputPath, directory)
+      .pipe(Effect.timeout("5 minutes"));
     const encoded = yield* fs.readFileString(outputPath);
     const raw = yield* Schema.decodeUnknownEffect(JsonValue)(encoded);
     return yield* Effect.try({
-      try: () => validateCandidates(raw, input.courseCode, allowed),
+      try: () =>
+        validateCandidates(raw, input.courseCode, allowed, [
+          ...input.changedRecords,
+          ...input.referencedDocuments,
+        ]),
       catch: (cause) => cause,
     });
   }).pipe(

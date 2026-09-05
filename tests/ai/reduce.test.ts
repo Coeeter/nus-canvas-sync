@@ -16,7 +16,7 @@ const candidate = (overrides: Partial<CourseCandidate>): CourseCandidate => ({
 });
 
 test("AI cadence text cannot release an assessment", () => {
-  expect(projectTask(candidateToFact(candidate({})), new Date()).state).toBe("expected");
+  expect(projectTask(candidateToFact(candidate({})), new Date()).state).toBe("review");
 });
 
 test("ambiguous or low-confidence candidates enter review", () => {
@@ -96,7 +96,7 @@ test("AI does not add a second bundle over deterministic module lessons", () => 
   expect(facts).toHaveLength(2);
 });
 
-test("model uncertainty cannot turn a deterministic source-backed fact into review", () => {
+test("a distinct candidate cannot overwrite a deterministic preparation fact", () => {
   const facts = mergeCandidateFacts(
     [
       {
@@ -119,7 +119,8 @@ test("model uncertainty cannot turn a deterministic source-backed fact into revi
     ],
   );
 
-  expect(facts).toHaveLength(1);
+  expect(facts).toHaveLength(2);
+  expect(facts[1]?.conflict).toBeDefined();
   expect(facts[0]?.conflict).toBeUndefined();
   expect(facts[0]?.title).toBe("Prepare GEA1000 Tutorial 2 questions");
 });

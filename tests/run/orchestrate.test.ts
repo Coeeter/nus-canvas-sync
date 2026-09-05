@@ -82,7 +82,7 @@ test("one course failure retains only its baseline and sends one alert", async (
       async (course) =>
         [
           course.code,
-          await Bun.file(join(dataDir, "baselines", `${course.code}.json`)).exists(),
+          await Bun.file(join(dataDir, "courses", `${course.code}.json`)).exists(),
         ] as const,
     ),
   );

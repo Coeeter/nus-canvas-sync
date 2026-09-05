@@ -1,9 +1,10 @@
 import { DateTime, Effect, Result } from "effect";
 import type { CanvasFile, CanvasPlannerItem } from "../../schemas/canvas.schema";
 import type { GithubCommit, GithubRepo } from "../../schemas/github.schema";
-import { COURSES, type Course, type CourseCode } from "../config/courses";
+import { COURSES, type Course, type CourseCode, SEMESTER_WINDOW } from "../config/courses";
 import { computeDiff } from "../diff/compute";
 import { EMPTY_DIFF, type SemanticDiff } from "../diff/types";
+import { TaskAffectingFailureError } from "../errors";
 import { type CourseEndpointResults, normalizeCourseRecords } from "../normalize/course";
 import {
   normalizeDocument,
@@ -37,7 +38,7 @@ export interface CollectionResult {
 }
 
 /** Planner covers the full declared semester window (README/sync.sh precedent). */
-const PLANNER_WINDOW = { startDate: "2026-07-19", endDate: "2027-01-10" };
+const PLANNER_WINDOW = SEMESTER_WINDOW;
 const PAGE_FETCH_CONCURRENCY = 4;
 const COMMIT_FETCH_CONCURRENCY = 4;
 const COURSE_FETCH_CONCURRENCY = 2;
@@ -108,8 +109,7 @@ const runCollection = Effect.fn("runCollection")(function* (dataDir: string) {
         plannerRecords: plannerByCourse.get(course.id) ?? [],
         githubRepos: course.code === "CS2030S" ? relevantRepos : [],
         githubCommits: course.code === "CS2030S" ? commitResults : [],
-        upstreamHealthy:
-          Result.isSuccess(plannerResult) && (course.code !== "CS2030S" || githubHealthy),
+        upstreamHealthy: course.code !== "CS2030S" || githubHealthy,
       }),
     ),
     { concurrency: COURSE_FETCH_CONCURRENCY },
@@ -125,6 +125,7 @@ const runCollection = Effect.fn("runCollection")(function* (dataDir: string) {
   }
 
   const manifest: RunManifest = {
+    phase: "collected",
     runId,
     startedAt,
     finishedAt: DateTime.formatIso(yield* DateTime.now),
@@ -168,13 +169,13 @@ interface CollectCourseDeps {
   upstreamHealthy: boolean;
 }
 
-const collectCourse = Effect.fn("collectCourse")(function* (
+export const collectCourse = Effect.fn("collectCourse")(function* (
   course: Course,
   deps: CollectCourseDeps,
 ) {
   const { canvas, dataDir, plannerRecords, githubRepos, githubCommits, upstreamHealthy } = deps;
 
-  const [assignments, quizzes, announcements, files, modules, frontPage, pagesIndex] =
+  const [assignments, quizzes, announcements, files, inlineModules, frontPage, pagesIndex] =
     yield* Effect.all(
       [
         Effect.result(canvas.assignments(course)),
@@ -188,17 +189,96 @@ const collectCourse = Effect.fn("collectCourse")(function* (
       { concurrency: ENDPOINT_FETCH_CONCURRENCY },
     );
 
-  const pageUrls = Result.isSuccess(pagesIndex) ? pagesIndex.success.map((page) => page.url) : [];
-  const pageBodies = yield* Effect.all(
-    pageUrls.map((url) => Effect.result(canvas.pageBody(course, url))),
+  const modules = Result.isFailure(inlineModules)
+    ? inlineModules
+    : yield* Effect.result(
+        Effect.forEach(
+          inlineModules.success,
+          (module) =>
+            Effect.gen(function* () {
+              if (
+                module.items &&
+                (module.items_count === undefined || module.items.length === module.items_count)
+              )
+                return module;
+              const items = yield* canvas.moduleItems(course, module.id);
+              if (module.items_count !== undefined && items.length !== module.items_count) {
+                return yield* new TaskAffectingFailureError({
+                  command: "collect module items",
+                  message: `Module ${module.id} item count changed or is incomplete`,
+                });
+              }
+              return { ...module, items };
+            }),
+          { concurrency: PAGE_FETCH_CONCURRENCY },
+        ),
+      );
+  const pageUrls = new Set(
+    Result.isSuccess(pagesIndex) ? pagesIndex.success.map((page) => page.url) : [],
+  );
+  if (Result.isSuccess(modules))
+    for (const module of modules.success) {
+      for (const item of module.items ?? []) if (item.page_url) pageUrls.add(item.page_url);
+    }
+  const discoverPages = (value: unknown) => {
+    for (const match of JSON.stringify(value).matchAll(
+      new RegExp(`/courses/${course.id}/pages/([a-zA-Z0-9_%.-]+)`, "g"),
+    ))
+      pageUrls.add(decodeURIComponent(match[1]!));
+  };
+  if (Result.isSuccess(frontPage)) discoverPages(frontPage.success);
+  if (Result.isSuccess(announcements)) discoverPages(announcements.success);
+  if (Result.isSuccess(assignments)) discoverPages(assignments.success);
+  const fetchedPages = new Map<
+    string,
+    EndpointResult<import("../../schemas/canvas.schema").CanvasPageBody>
+  >();
+  while ([...pageUrls].some((url) => !fetchedPages.has(url))) {
+    const batch = [...pageUrls].filter((url) => !fetchedPages.has(url));
+    if (pageUrls.size > 500)
+      return yield* new TaskAffectingFailureError({
+        command: "collect pages",
+        message: "Page discovery exceeded 500 distinct course pages",
+      });
+    const results = yield* Effect.forEach(
+      batch,
+      (url) => Effect.result(canvas.pageBody(course, url)),
+      { concurrency: PAGE_FETCH_CONCURRENCY },
+    );
+    for (const [index, result] of results.entries()) {
+      fetchedPages.set(batch[index]!, result);
+      if (Result.isSuccess(result)) discoverPages(result.success);
+    }
+  }
+  const pageBodies = [...fetchedPages.values()];
+  const fileIds = new Set<number>();
+  const discovery = [assignments, announcements, modules, frontPage, ...pageBodies].flatMap(
+    (result) => (result._tag === "Success" ? [result.success as unknown] : []),
+  );
+  for (const match of JSON.stringify(discovery).matchAll(/\/files\/(\d+)/g))
+    fileIds.add(Number(match[1]));
+  if (Result.isSuccess(modules))
+    for (const module of modules.success) {
+      for (const item of module.items ?? [])
+        if (item.type === "File" && item.content_id) fileIds.add(item.content_id);
+    }
+  const collectedFiles = Result.isSuccess(files) ? [...files.success] : [];
+  const missingFileIds = [...fileIds].filter(
+    (id) => !collectedFiles.some((file) => file.id === id),
+  );
+  const fileResults = yield* Effect.forEach(
+    missingFileIds,
+    (id) => Effect.result(canvas.file(id)),
     { concurrency: PAGE_FETCH_CONCURRENCY },
   );
+  for (const result of fileResults)
+    if (Result.isSuccess(result)) collectedFiles.push(result.success);
 
   const endpoints: CourseEndpointResults = {
     assignments,
     quizzes,
     announcements,
-    files,
+    files: Result.succeed(collectedFiles),
     modules,
     frontPage,
     pageBodies,
@@ -221,7 +301,7 @@ const collectCourse = Effect.fn("collectCourse")(function* (
   const documents = yield* collectDocuments(
     course,
     dataDir,
-    files,
+    Result.succeed(collectedFiles),
     sourceRecords,
     changedRecords,
     baseline,
@@ -236,7 +316,10 @@ const collectCourse = Effect.fn("collectCourse")(function* (
     frontPage: summarizeResult(frontPage),
     pages: summarizeResult(pagesIndex),
     ...Object.fromEntries(
-      pageUrls.map((url, index) => [`page:${url}`, summarizeResult(pageBodies[index]!)]),
+      [...fetchedPages].map(([url, result]) => [`page:${url}`, summarizeResult(result)]),
+    ),
+    ...Object.fromEntries(
+      missingFileIds.map((id, index) => [`file:${id}`, summarizeResult(fileResults[index]!)]),
     ),
     documents: { status: "ok", count: documents.records.length } as const,
     ...documents.outcomes,
@@ -262,8 +345,7 @@ const collectCourse = Effect.fn("collectCourse")(function* (
  * SRC-006: selects files referenced by this course's just-fetched prose (or
  * deterministically recognisable by name), downloads and extracts each, and
  * normalizes them so their content hash participates in the next diff. A
- * single document's download/extraction failure is skipped, not fatal —
- * it's supplementary evidence for AI interpretation, not required coverage.
+ * selected document failure is a course coverage failure.
  */
 const collectDocuments = Effect.fn("collectDocuments")(function* (
   course: Course,
@@ -299,7 +381,11 @@ const collectDocuments = Effect.fn("collectDocuments")(function* (
       const fileChanged = changedIds.has(`course:${course.id}:file:${file.id}`);
       const cachedText = cached?.fields.text;
       const extraction =
-        cached && !fileChanged && !referencedFromChanges.has(file.id)
+        cached &&
+        typeof cachedText === "string" &&
+        cachedText.trim().length > 0 &&
+        !fileChanged &&
+        !referencedFromChanges.has(file.id)
           ? Effect.succeed({
               text: typeof cachedText === "string" ? cachedText : null,
             })
@@ -316,6 +402,13 @@ const collectDocuments = Effect.fn("collectDocuments")(function* (
     if (!file) continue;
     outcomes[`document:${file.id}`] = summarizeResult(result);
     if (Result.isSuccess(result)) {
+      if (!result.success.text?.trim()) {
+        outcomes[`document:${file.id}`] = {
+          status: "TaskAffectingFailureError",
+          detail: "Selected document contained no extractable text",
+        };
+        continue;
+      }
       documentRecords.push(
         normalizeDocument(
           course,

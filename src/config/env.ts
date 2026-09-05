@@ -11,7 +11,7 @@ const makeAppConfig = Effect.gen(function* () {
   const canvasUrl = yield* Config.string("CANVAS_URL");
   const canvasToken = yield* Config.redacted("CANVAS_TOKEN");
   const githubToken = yield* Config.redacted("GH_TOKEN");
-  const dataDir = yield* Config.string("DATA_DIR").pipe(Config.withDefault("./snapshots"));
+  const dataDir = yield* Config.string("DATA_DIR").pipe(Config.withDefault("./data"));
   return { canvasUrl, canvasToken, githubToken, dataDir } satisfies AppConfigShape;
 });
 

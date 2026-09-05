@@ -39,6 +39,8 @@ export interface CourseManifestEntry {
 }
 
 export interface RunManifest {
+  phase?: "collected" | "completed";
+  ok?: boolean;
   runId: string;
   startedAt: string;
   finishedAt: string;

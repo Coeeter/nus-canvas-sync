@@ -59,5 +59,23 @@ function readNotionValue(property: unknown): unknown {
 }
 
 function richText(value: unknown) {
-  return value == null || value === "" ? [] : [{ type: "text", text: { content: String(value) } }];
+  return value == null || value === ""
+    ? []
+    : (String(value).match(/[\s\S]{1,1900}/g) ?? []).map((content) => ({
+        type: "text",
+        text: { content },
+      }));
+}
+
+export function mergeManagedNotes(current: unknown, source: string) {
+  const start = "[Canvas sync evidence]";
+  const end = "[/Canvas sync evidence]";
+  const text = typeof current === "string" ? current : "";
+  const from = text.indexOf(start);
+  const to = text.indexOf(end, from);
+  const user =
+    from >= 0 && to >= from
+      ? `${text.slice(0, from)}${text.slice(to + end.length)}`.trim()
+      : text.trim();
+  return [user, `${start}\n${source.slice(0, 50000)}\n${end}`].filter(Boolean).join("\n\n");
 }

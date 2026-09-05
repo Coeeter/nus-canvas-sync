@@ -1,6 +1,6 @@
-import { Context, Effect, Layer, Redacted, Schema } from "effect";
+import { Context, Effect, Layer, Redacted } from "effect";
 import {
-  githubCommitListSchema,
+  githubCommitSchema,
   githubRepoListSchema,
   viewerLoginSchema,
 } from "../../schemas/github.schema";
@@ -9,7 +9,6 @@ import { decodeRequired } from "./outcome";
 import { runProcess } from "./process";
 
 const CS2030S_ORG = "nus-cs2030s-2627-s1";
-const githubCommitPagesSchema = Schema.Array(githubCommitListSchema);
 
 export class GithubClient extends Context.Service<GithubClient>()("GithubClient", {
   make: Effect.gen(function* () {
@@ -46,23 +45,14 @@ export class GithubClient extends Context.Service<GithubClient>()("GithubClient"
     });
 
     const commits = Effect.fn("GithubClient.commits")(function* (repoName: string) {
-      const args = [
-        "api",
-        "-X",
-        "GET",
-        `repos/${CS2030S_ORG}/${repoName}/commits`,
-        "-f",
-        "per_page=100",
-        "--paginate",
-        "--slurp",
-      ];
+      const args = ["api", "-X", "GET", `repos/${CS2030S_ORG}/${repoName}/commits/HEAD`];
       const result = yield* runProcess("gh", args, env);
       const pages = yield* decodeRequired({
         command: `gh ${args.join(" ")}`,
         result,
-        schema: githubCommitPagesSchema,
+        schema: githubCommitSchema,
       });
-      return pages.flat();
+      return [pages];
     });
 
     const relevantExerciseRepos = (login: string, repoNames: ReadonlyArray<string>) =>

@@ -12,7 +12,7 @@ const record = {
   kind: "announcement",
   sourceUrl: null,
   contentHash: "x",
-  fields: { message: "Quiz" },
+  fields: { message: "Quiz announced" },
 } satisfies NormalizedRecord;
 
 test("keeps large prompts out of Codex argv", () => {

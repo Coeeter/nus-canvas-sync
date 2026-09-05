@@ -41,7 +41,7 @@ export function hasDownloadableUrl(file: CanvasFile): boolean {
 }
 
 export function isExtractableDocument(file: CanvasFile): boolean {
-  return /\.(?:pdf|txt|md)$/i.test(file.display_name);
+  return /\.(?:pdf|txt|md|docx)$/i.test(file.display_name);
 }
 
 export function referencedByForFile(
@@ -54,7 +54,8 @@ export function referencedByForFile(
       const value = JSON.stringify(record.fields);
       return (
         value.includes(`/files/${file.id}`) ||
-        value.includes(sanitizeSourceText(file.url)) ||
+        (file.url.trim() !== "" && value.includes(sanitizeSourceText(file.url))) ||
+        (record.kind === "module" && value.includes(`"contentId":${file.id}`)) ||
         ((record.kind === "announcement" || record.kind === "assignment") &&
           value.toLowerCase().includes(nameWithoutExtension))
       );
@@ -80,6 +81,14 @@ export const downloadAndExtract = Effect.fn("downloadAndExtract")(function* (
         new TaskAffectingFailureError({
           command: `download ${file.url}`,
           message: error.message,
+        }),
+    ),
+    Effect.timeout("60 seconds"),
+    Effect.mapError(
+      () =>
+        new TaskAffectingFailureError({
+          command: `download file ${file.id}`,
+          message: "Document download failed or timed out",
         }),
     ),
     Effect.provide(FetchHttpClient.layer),
@@ -113,7 +122,23 @@ const toDocumentError =
 const extractText = Effect.fn("extractText")(function* (path: string, displayName: string) {
   if (/\.(txt|md)$/i.test(displayName)) {
     const fs = yield* FileSystem.FileSystem;
-    return yield* Effect.orElseSucceed(fs.readFileString(path), () => null);
+    return yield* fs.readFileString(path);
+  }
+  if (/\.docx$/i.test(displayName)) {
+    const result = yield* runProcess("unzip", ["-p", path, "word/document.xml"], {
+      PATH: process.env.PATH ?? "",
+    });
+    if (result.exitCode !== 0)
+      return yield* new TaskAffectingFailureError({
+        command: "unzip DOCX",
+        message: result.stderr.slice(0, 500),
+      });
+    return result.stdout
+      .replace(/<\/w:p>/g, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">");
   }
   if (/\.pdf$/i.test(displayName)) {
     const result = yield* runProcess("pdftotext", [path, "-"], {

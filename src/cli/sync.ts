@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { BunRuntime, BunServices } from "@effect/platform-bun";
-import { Config, Console, Effect, Layer, Option, Predicate } from "effect";
+import { Config, Console, DateTime, Effect, Layer, Option, Predicate, Result } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -10,6 +11,7 @@ import { GithubClient } from "../collector/github";
 import { collectUnlocked } from "../collector/run";
 import { NotionClient } from "../notion/client";
 import { runSync } from "../run/orchestrate";
+import { writeJsonAtomic } from "../state/atomic";
 import { withRunLock } from "../state/lock";
 
 const DATA_SOURCE_ID = "e04655de-e228-44cb-9042-597968f7057a";
@@ -55,11 +57,13 @@ const sync = Effect.fn("syncCli")(function* (dataDir: string) {
     notionToken,
     notionDataSourceId.replace("collection://", ""),
     httpClient,
+    dataDir,
   );
   const alert = new ResendAlertClient(resendApiKey, alertEmailFrom, alertEmailTo, httpClient);
   const executor = new CodexCliExecutor();
   const instructions = yield* fs.readFileString("prompts/extract-course.md");
   const schema = yield* fs.readFileString("schemas/course-candidates.schema.json");
+  yield* notion.validateSchema();
   const healthBlockId = Option.isSome(configuredHealthBlockId)
     ? configuredHealthBlockId.value
     : yield* notion.findHealthBlock(DASHBOARD_PAGE_ID);
@@ -71,8 +75,14 @@ const sync = Effect.fn("syncCli")(function* (dataDir: string) {
     healthBlockId,
     dashboardUrl,
     dataDir,
+    policyVersion: instructions + schema,
   });
 
+  yield* writeJsonAtomic(`${dataDir}/run-status.json`, {
+    ok: result.ok,
+    finishedAt: DateTime.formatIso(yield* DateTime.now),
+    runId: result.collection.runId,
+  });
   yield* Console.log(
     JSON.stringify({
       event: "sync_finished",
@@ -92,12 +102,58 @@ const sync = Effect.fn("syncCli")(function* (dataDir: string) {
 });
 
 const program = Effect.gen(function* () {
-  const dataDir = yield* Config.string("DATA_DIR").pipe(Config.withDefault("/data"));
-  return yield* withRunLock(dataDir, sync(dataDir));
+  const dataDir = yield* Config.string("DATA_DIR").pipe(Config.withDefault("./data"));
+  return yield* withRunLock(
+    dataDir,
+    sync(dataDir).pipe(
+      Effect.catch((error) =>
+        Effect.gen(function* () {
+          const time = DateTime.formatIso(yield* DateTime.now);
+          yield* writeJsonAtomic(`${dataDir}/run-status.json`, {
+            ok: false,
+            finishedAt: time,
+            stage: "fatal",
+          }).pipe(Effect.ignore);
+          const alert = yield* Effect.gen(function* () {
+            const key = yield* Config.redacted("RESEND_API_KEY");
+            const from = yield* Config.string("ALERT_EMAIL_FROM");
+            const to = yield* Config.string("ALERT_EMAIL_TO").pipe(
+              Config.withDefault("nasrullah01n@gmail.com"),
+            );
+            const http = yield* HttpClient.HttpClient;
+            yield* new ResendAlertClient(key, from, to, http).send({
+              runId: `fatal-${randomUUID()}`,
+              runTime: time,
+              summary: "LAST SYNC FAILED — system failure before completion",
+              failures: [
+                {
+                  course: "SYSTEM",
+                  stage: "fatal",
+                  detail: "The sync could not complete; inspect local logs and configuration.",
+                },
+              ],
+              dashboardUrl: DASHBOARD_URL,
+            });
+          }).pipe(Effect.result);
+          if (Result.isFailure(alert))
+            yield* Console.error(
+              "Fatal sync alert could not be sent; inspect local configuration and logs.",
+            );
+          return yield* Effect.fail(error);
+        }),
+      ),
+    ),
+  );
 }).pipe(
   Effect.catch((error) =>
     Predicate.isTagged("RunLockedError")(error)
-      ? Console.log(JSON.stringify({ event: "sync_skipped", reason: "run_already_active" }))
+      ? Console.log(JSON.stringify({ event: "sync_skipped", reason: "run_already_active" })).pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              process.exitCode = 1;
+            }),
+          ),
+        )
       : Effect.fail(error),
   ),
   Effect.provide(MainLive),

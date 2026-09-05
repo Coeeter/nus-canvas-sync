@@ -17,6 +17,7 @@
     "test:container": "bun test tests/container",
     "test:diff": "bun test tests/diff",
     "test:incidents": "bun test tests/rules tests/projector",
+    "test:local": "bun test tests/integration tests/notion tests/state tests/rules",
     "test:notion": "bun test tests/notion tests/reconcile",
     "test:reconcile": "bun test tests/reconcile",
     "test:rules": "bun test tests/rules tests/projector",

@@ -1,15 +1,17 @@
-import { Config, Context, Effect, Layer, Redacted, type Schema } from "effect";
+import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import {
   announcementListSchema,
   assignmentListSchema,
   fileListSchema,
+  fileSchema,
+  moduleItemSchema,
   moduleListSchema,
   pageBodySchema,
   pageIndexSchema,
   plannerListSchema,
   quizListSchema,
 } from "../../schemas/canvas.schema";
-import type { Course, CourseEndpoint } from "../config/courses";
+import { type Course, type CourseEndpoint, SEMESTER_WINDOW } from "../config/courses";
 import { AppConfig } from "../config/env";
 import { decodeEndpoint, decodeRequired } from "./outcome";
 import { runProcess } from "./process";
@@ -80,7 +82,16 @@ export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient"
       return yield* call(
         course,
         "announcements",
-        ["announcements", "list", "--course-id", courseArgs(course.id)],
+        [
+          "announcements",
+          "list",
+          "--course-id",
+          courseArgs(course.id),
+          "--start-date",
+          SEMESTER_WINDOW.startDate,
+          "--end-date",
+          SEMESTER_WINDOW.endDate,
+        ],
         announcementListSchema,
       );
     });
@@ -108,6 +119,29 @@ export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient"
         ],
         moduleListSchema,
       );
+    });
+
+    const moduleItems = Effect.fn("CanvasClient.moduleItems")(function* (
+      course: Course,
+      moduleId: number,
+    ) {
+      return yield* callRequired(
+        [
+          "modules",
+          "items",
+          "list",
+          "--course-id",
+          String(course.id),
+          "--module-id",
+          String(moduleId),
+          "--include",
+          "content_details",
+        ],
+        Schema.Array(moduleItemSchema),
+      );
+    });
+    const file = Effect.fn("CanvasClient.file")(function* (fileId: number) {
+      return yield* callRequired(["files", "get", String(fileId)], fileSchema);
     });
 
     const frontPage = Effect.fn("CanvasClient.frontPage")(function* (course: Course) {
@@ -163,6 +197,8 @@ export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient"
     });
 
     return {
+      moduleItems,
+      file,
       assignments,
       quizzes,
       announcements,

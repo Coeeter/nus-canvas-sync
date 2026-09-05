@@ -20,26 +20,64 @@
           "dueAt",
           "eventEndsAt",
           "confidence",
-          "ambiguity"
+          "ambiguity",
+          "actionKey",
+          "relationship"
         ],
         "properties": {
           "courseCode": {
             "type": "string",
             "enum": ["CS2030S", "GEA1000", "GESS1001", "IS1128", "MA1301"]
           },
-          "sourceIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-          "evidence": { "type": "string", "minLength": 1 },
+          "sourceIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          },
           "kind": {
             "type": "string",
             "enum": ["assessment", "preparation", "e-lecture", "physical-event", "optional"]
           },
-          "title": { "type": "string", "minLength": 1 },
-          "requiredAction": { "type": "string" },
-          "availableFrom": { "type": ["string", "null"] },
-          "dueAt": { "type": ["string", "null"] },
-          "eventEndsAt": { "type": ["string", "null"] },
-          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-          "ambiguity": { "type": ["string", "null"] }
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requiredAction": {
+            "type": "string"
+          },
+          "availableFrom": {
+            "type": ["string", "null"]
+          },
+          "dueAt": {
+            "type": ["string", "null"]
+          },
+          "eventEndsAt": {
+            "type": ["string", "null"]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "ambiguity": {
+            "type": ["string", "null"]
+          },
+          "actionKey": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable source-native action or deliverable label, e.g. project-peer-assessment. Reuse this key when only wording or dates change; distinct required stages have distinct keys."
+          },
+          "relationship": {
+            "type": "string",
+            "enum": ["action", "enrichment"],
+            "description": "enrichment only adds details to the same dedicated Canvas assessment; a distinct required stage or preparation is action."
+          }
         }
       }
     }

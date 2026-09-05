@@ -27,7 +27,7 @@ RUN apt-get update \
 FROM oven/bun:1.4.0-debian
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates poppler-utils \
+    && apt-get install -y --no-install-recommends ca-certificates poppler-utils unzip \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 nus-sync \
     && useradd --uid 10001 --gid 10001 --create-home --home-dir /home/nus-sync nus-sync

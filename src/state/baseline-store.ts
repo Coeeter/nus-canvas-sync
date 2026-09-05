@@ -4,13 +4,17 @@ import * as Schema from "effect/Schema";
 import type { CourseCode } from "../config/courses";
 import type { NormalizedRecord } from "../normalize/types";
 import { writeJsonAtomic } from "./atomic";
+import { readCourseState } from "./course-store";
 import { baselinePath } from "./paths";
+import { normalizedRecordSchema } from "./record-schema";
 
 /** DIF-001: the previous successful snapshot for one course, retained independently of the others. */
 export const readBaseline = Effect.fn("readBaseline")(function* (
   dataDir: string,
   courseCode: CourseCode,
 ) {
+  const state = yield* readCourseState(dataDir, courseCode);
+  if (state) return state.records;
   const fs = yield* FileSystem.FileSystem;
   const path = baselinePath(dataDir, courseCode);
   const exists = yield* fs.exists(path);
@@ -31,24 +35,4 @@ export const writeBaseline = Effect.fn("writeBaseline")(function* (
   records: ReadonlyArray<NormalizedRecord>,
 ) {
   yield* writeJsonAtomic(baselinePath(dataDir, courseCode), records);
-});
-
-const normalizedRecordSchema = Schema.Struct({
-  id: Schema.String,
-  courseCode: Schema.Literals(["CS2030S", "GEA1000", "GESS1001", "IS1128", "MA1301"]),
-  kind: Schema.Literals([
-    "assignment",
-    "quiz",
-    "announcement",
-    "module",
-    "page",
-    "file",
-    "document",
-    "planner-item",
-    "github-repo",
-    "github-commit",
-  ]),
-  sourceUrl: Schema.NullOr(Schema.String),
-  contentHash: Schema.String,
-  fields: Schema.Record(Schema.String, Schema.Unknown),
 });

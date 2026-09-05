@@ -169,7 +169,7 @@ test("MA1301 weekly source-assigned work becomes one preparation fact", () => {
   ]);
 });
 
-test("known GEA1000 announcements become concrete work instead of review-the-brief todos", () => {
+test("GEA1000 titles cannot inject historical dates", () => {
   const facts = factsFromRecords([
     base({
       id: "course:94257:announcement:485604",
@@ -193,25 +193,10 @@ test("known GEA1000 announcements become concrete work instead of review-the-bri
     }),
   ]);
 
-  expect(facts).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        id: "course:94257:announcement:485604",
-        kind: "preparation",
-        title: "Prepare GEA1000 Tutorial 2 questions",
-        eventEndsAt: "2026-09-09T04:00:00.000Z",
-      }),
-      expect.objectContaining({
-        id: "course:94257:announcement:481086",
-        kind: "assessment",
-        title: "Create GEA1000 group video assignment",
-        dueAt: "2026-09-29",
-      }),
-    ]),
-  );
+  expect(facts).toEqual([]); // Titles alone cannot establish current instructions or dates.
 });
 
-test("known GESS1001 sources become tutorial preparation and distinct real assignments", () => {
+test("GESS1001 titles cannot inject historical assignment facts", () => {
   const facts = factsFromRecords([
     base({
       id: "course:94548:announcement:486744",
@@ -253,25 +238,5 @@ test("known GESS1001 sources become tutorial preparation and distinct real assig
     }),
   ]);
 
-  expect(facts).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        id: "course:94548:announcement:486744",
-        title: "Prepare GESS1001 Tutorial 2 — Long Island stakeholder debate",
-        sourceIds: expect.arrayContaining([
-          "course:94548:announcement:486744",
-          "course:94548:module:157035:item:826236",
-        ]),
-      }),
-      expect.objectContaining({
-        id: "course:94548:announcement:482225",
-        title: "Create GESS1001 group heritage/tourism landscape project",
-      }),
-      expect.objectContaining({
-        id: "course:94548:announcement:482225:individual-assignment",
-        title: "Write GESS1001 individual migrant landscapes article",
-        conflict: expect.objectContaining({ reason: expect.stringContaining("2026-09-18") }),
-      }),
-    ]),
-  );
+  expect(facts).toEqual([]); // The current brief must supply the work and any conflict.
 });

@@ -24,5 +24,5 @@ test("unchanged candidates persist while affected candidates are replaced", () =
       { candidates: [fresh] },
       new Set(["source:2"]),
     ),
-  ).toEqual({ candidates: [retained, fresh] });
+  ).toEqual({ candidates: [retained, expect.objectContaining(fresh)] });
 });

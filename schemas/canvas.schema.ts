@@ -96,6 +96,7 @@ export const moduleSchema = Schema.Struct({
   published: Schema.optional(Schema.Boolean),
   unlock_at: Schema.optional(nullableDate),
   state: Schema.optional(Schema.String),
+  items_count: Schema.optional(Schema.Number),
   items: Schema.optional(Schema.NullOr(Schema.Array(moduleItemSchema))),
 });
 export const moduleListSchema = Schema.Array(moduleSchema);

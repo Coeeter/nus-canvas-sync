@@ -5,6 +5,9 @@ export interface CourseCandidate {
   courseCode: CourseCode;
   sourceIds: ReadonlyArray<string>;
   evidence: string;
+  actionKey?: string | undefined;
+  identity?: string | undefined;
+  relationship?: "action" | "enrichment" | undefined;
   kind: TaskKind;
   title: string;
   requiredAction: string;

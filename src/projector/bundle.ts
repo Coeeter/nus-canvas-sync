@@ -1,16 +1,42 @@
 import { createHash } from "node:crypto";
 import type { TaskProjection } from "../domain/task";
+import type { ExistingAction } from "../reconcile/plan";
 
 export function bundleContiguousLectures(
   tasks: ReadonlyArray<TaskProjection>,
+  existing: ReadonlyArray<ExistingAction> = [],
 ): Array<TaskProjection> {
   const passthrough = tasks.filter(
     (task) => task.kind !== "e-lecture" || task.week === undefined || task.state !== "ready",
   );
-  const lectures = tasks.filter(
+  let lectures = tasks.filter(
     (task): task is TaskProjection & { week: number } =>
       task.kind === "e-lecture" && task.week !== undefined && task.state === "ready",
   );
+
+  // Keep an unfinished bundle's membership fixed when a later week opens.
+  for (const row of existing) {
+    if (
+      !row.automatedIdentity?.startsWith("bundle:") ||
+      ["Done", "Dropped"].includes(String(row.properties.Status))
+    )
+      continue;
+    const members = String(row.properties["Parent Canvas ID"] ?? "")
+      .split("\n")
+      .filter(Boolean)
+      .sort();
+    const group = lectures.filter((task) => task.sourceIds.every((id) => members.includes(id)));
+    const actual = group.flatMap((task) => task.sourceIds).sort();
+    if (!group.length || JSON.stringify(actual) !== JSON.stringify(members)) continue;
+    passthrough.push({
+      ...group[0]!,
+      id: row.automatedIdentity,
+      title: String(row.properties.Action ?? group[0]!.title),
+      sourceIds: members,
+      memberSourceIds: members,
+    });
+    lectures = lectures.filter((task) => !group.includes(task));
+  }
 
   for (const courseCode of new Set(lectures.map((task) => task.courseCode))) {
     const course = lectures

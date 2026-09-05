@@ -76,7 +76,12 @@ test("canonical projections migrate an exact legacy numeric identity in place", 
       {
         id: "legacy-page",
         automatedIdentity: "262076",
-        properties: { Status: "Done", Action: "Quiz 2" },
+        properties: {
+          Status: "Done",
+          Action: "Quiz 2",
+          "Canvas Course ID": "94257",
+          "Canvas Item Type": "assessment",
+        },
       },
     ],
     [projection],
@@ -88,7 +93,7 @@ test("canonical projections migrate an exact legacy numeric identity in place", 
   expect(operation?.properties).not.toHaveProperty("Status");
 });
 
-test("legacy suffixed identities are matched by meaningful action words without reusing a row", () => {
+test("unscoped legacy names are not guessed from title words", () => {
   const projections = [
     projectTask(
       {
@@ -129,8 +134,8 @@ test("legacy suffixed identities are matched by meaningful action words without 
   );
 
   expect(operations.map((operation) => operation.type === "update" && operation.pageId)).toEqual([
-    "group",
-    "individual",
+    false,
+    false,
   ]);
 });
 
@@ -165,7 +170,17 @@ test("new rows are limited to ready or review work while existing history is ret
   expect(
     selectTrackedTasks(
       [ready, locked],
-      [{ id: "old", automatedIdentity: "2", properties: { Status: "Waiting" } }],
+      [
+        {
+          id: "old",
+          automatedIdentity: "2",
+          properties: {
+            Status: "Waiting",
+            "Canvas Course ID": "97325",
+            "Canvas Item Type": "assessment",
+          },
+        },
+      ],
     ),
   ).toEqual([ready, locked]);
 });

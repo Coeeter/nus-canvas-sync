@@ -89,3 +89,5 @@ export function acceptsGapFailure(
   if (configured) return configured.includes(failure);
   return failure === "not-found" && endpoint in capabilities[course].gaps;
 }
+
+export const SEMESTER_WINDOW = { startDate: "2026-07-19", endDate: "2027-01-10" };
