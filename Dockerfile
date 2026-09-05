@@ -52,4 +52,4 @@ ENV DATA_DIR=/data \
 USER nus-sync
 VOLUME ["/data", "/codex-home"]
 CMD ["bun", "run", "sync"]
-HEALTHCHECK --interval=1m --timeout=10s --start-period=10s --retries=3 CMD ["bun", "run", "healthcheck"]
+HEALTHCHECK --interval=1m --timeout=10s --start-period=10s --retries=3 CMD ["sh", "-c", "HEALTHCHECK_MODE=artifacts bun run healthcheck"]

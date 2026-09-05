@@ -13,6 +13,9 @@ test("container pins required tools and delegates scheduling to Dokploy", async 
   expect(dockerfile).toContain("CODEX_VERSION=0.150.1");
   expect(dockerfile).toContain("USER nus-sync");
   expect(dockerfile).toContain('CMD ["bun", "run", "sync"]');
+  expect(dockerfile).toContain(
+    'HEALTHCHECK --interval=1m --timeout=10s --start-period=10s --retries=3 CMD ["sh", "-c", "HEALTHCHECK_MODE=artifacts bun run healthcheck"]',
+  );
   expect(dockerfile).not.toContain("DOPPLER_VERSION");
   expect(dockerfile).not.toContain("doppler run");
   expect(dockerfile).not.toMatch(/CANVAS_TOKEN|RESEND_API_KEY|NOTION_TOKEN|GH_TOKEN/);

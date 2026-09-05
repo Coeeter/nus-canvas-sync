@@ -100,6 +100,13 @@ This runs at 07:00, 12:00, 17:00, and 22:00. Do not add a 03:00 run.
    fresh state for all five courses.
 8. Enable the four Dokploy schedules only after that manual run succeeds.
 
+The image healthcheck uses `HEALTHCHECK_MODE=artifacts` because the Application
+container is an idle job host. A state-aware healthcheck can kill an in-progress
+sync after a failed or absent previous run, preventing that run from repairing
+the state. Use the default `bun run healthcheck` explicitly to verify operational
+sync freshness; sync failures also update `run-status.json`, the Notion health
+callout, and Resend alerts.
+
 Rollback is to disable the Dokploy schedule and pin the previous working image
 SHA. The paused legacy automation stays paused unless Nas explicitly chooses to
 reactivate it; do not delete or reactivate it automatically.
