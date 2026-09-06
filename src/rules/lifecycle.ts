@@ -1,6 +1,5 @@
 import { COURSE_RULES } from "../../config/course-rules";
 import type { TaskFact, TaskProjection } from "../domain/task";
-import { sourceDate, validSourceDate } from "../normalize/dates";
 
 const TERMINAL = new Set(["Done", "Dropped"]);
 
@@ -18,12 +17,6 @@ export function projectTask(fact: TaskFact, now: Date): TaskProjection {
     return base(fact.userStatus === "Done" ? "done" : "inactive", "Preserved user choice");
   }
   if (fact.completed) return base("done", "Authoritative completion evidence");
-  if (
-    [fact.availableFrom, fact.dueAt, fact.eventEndsAt, fact.lockAt].some(
-      (value) => value != null && !validSourceDate(value),
-    )
-  )
-    return base("review", "Invalid source date");
   if (fact.conflict) return base("review", fact.conflict.reason);
   if (fact.kind === "optional") return base("inactive", "Optional material is opt-in");
   if (fact.kind === "physical-event") return base("inactive", "Attendance is calendar context");
@@ -33,15 +26,12 @@ export function projectTask(fact: TaskFact, now: Date): TaskProjection {
   if (!fact.observed || (fact.kind === "assessment" && !fact.authoritativeAction)) {
     return base("expected", "Cadence or schedule is not release evidence");
   }
-  if (fact.kind === "preparation" && fact.eventEndsAt && now >= sourceDate(fact.eventEndsAt)) {
+  if (fact.kind === "preparation" && fact.eventEndsAt && now >= new Date(fact.eventEndsAt)) {
     return base("expired", "Preparation event has ended");
   }
   if (fact.blockedBy) return base("waiting", `Waiting on ${fact.blockedBy}`);
-  if (fact.published === false) return base("locked", "Source is unpublished");
-  if (!fact.scheduled && (fact.lockedForUser || (fact.lockAt && now >= sourceDate(fact.lockAt))))
-    return base("locked", "Source is locked or closed");
   if (fact.scheduled) return base("scheduled", "Assessed work takes place during class");
-  if (fact.availableFrom && now < sourceDate(fact.availableFrom)) {
+  if (fact.availableFrom && now < new Date(fact.availableFrom)) {
     return base("locked", "Authoritative release time is in the future");
   }
   return base("ready", null);

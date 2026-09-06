@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
 import { DateTime, Effect, FileSystem, Option, Path, Result } from "effect";
 import type { ChildProcessSpawner } from "effect/unstable/process";
-import { affectedInterpretation } from "../ai/affected";
 import type { CourseInterpretationInput } from "../ai/input";
 import { mergeCandidateFacts } from "../ai/reduce";
 import { mergeCandidateEnvelopes } from "../ai/state";
@@ -19,21 +17,14 @@ import type { ExistingAction, ReconcileOperation } from "../reconcile/plan";
 import { findExistingAction, planReconciliation, selectTrackedTasks } from "../reconcile/plan";
 import { projectTask } from "../rules/lifecycle";
 import { writeJsonAtomic } from "../state/atomic";
-import { type CourseState, readCourseState, writeCourseState } from "../state/course-store";
-import { mappedActions } from "../state/identity-mappings";
-import { readInterpretation } from "../state/interpretation-store";
-import { planDates, reconcileMissing, restoreUserDecisions } from "./course-state";
+import { writeBaseline } from "../state/baseline-store";
+import { readInterpretation, writeInterpretation } from "../state/interpretation-store";
 
 const PROSE_KINDS = new Set(["assignment", "quiz", "announcement", "module", "page"]);
 
 interface NotionSyncClient {
-  listExistingActions(
-    recoveryPageIds?: ReadonlyArray<string>,
-  ): Effect.Effect<ReadonlyArray<ExistingAction>, unknown>;
-  applyAndVerify(
-    operation: ReconcileOperation,
-  ): Effect.Effect<unknown, unknown, FileSystem.FileSystem | Path.Path>;
-  syncPlannerViews?(now: Date): Effect.Effect<void, unknown>;
+  listExistingActions(): Effect.Effect<ReadonlyArray<ExistingAction>, unknown>;
+  applyAndVerify(operation: ReconcileOperation): Effect.Effect<unknown, unknown>;
   updateHealthBlock(blockId: string, message: string): Effect.Effect<void, unknown>;
 }
 
@@ -56,7 +47,6 @@ export interface SyncDependencies {
   readonly dashboardUrl: string;
   readonly dataDir: string;
   readonly now?: DateTime.Utc;
-  readonly policyVersion?: string;
 }
 
 export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
@@ -79,17 +69,8 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
     Effect.withSpan("nus-sync.collection"),
   );
 
-  const states = yield* Effect.forEach(collection.manifest.courses, (entry) =>
-    readCourseState(deps.dataDir, entry.courseCode).pipe(Effect.result),
-  );
-  const recoveryPageIds = states.flatMap((state) =>
-    Result.isSuccess(state) && state.success
-      ? Object.values(state.success.managed).map((action) => action.pageId)
-      : [],
-  );
   yield* logEvent("notion_read_started", { runId: collection.runId });
-  const notionRead = yield* deps.notion.listExistingActions(recoveryPageIds).pipe(
-    Effect.flatMap((actions) => mappedActions(deps.dataDir, actions)),
+  const notionRead = yield* deps.notion.listExistingActions().pipe(
     Effect.tap((actions) =>
       logEvent("notion_read_finished", { runId: collection.runId, actions: actions.length }),
     ),
@@ -149,33 +130,14 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
     const courseResult = yield* Effect.gen(function* () {
       if (Result.isFailure(notionRead)) return yield* Effect.fail(notionRead.failure);
 
-      const previousState = yield* readCourseState(deps.dataDir, entry.courseCode);
-      const previousCandidates =
-        previousState?.candidates ?? (yield* readInterpretation(deps.dataDir, entry.courseCode));
-      const policy = createHash("sha256")
-        .update(
-          `${deps.policyVersion ?? "audit-fixes-v1"}\n${courseContext(contextDocument, entry.courseCode)}`,
-        )
-        .digest("hex");
-      const { records: changed, affectedSourceIds } = affectedInterpretation(
-        previousState?.records ?? [],
-        records,
-        previousCandidates ?? { candidates: [] },
-        !previousState || previousState.policy !== policy,
-      );
-      const state: CourseState = {
-        version: 1,
-        runId: collection.runId,
-        syncedAt: nowIso,
-        policy,
-        records,
-        candidates: { candidates: [] },
-        managed: { ...previousState?.managed },
-        resolutions: { ...previousState?.resolutions },
-        terminalMembers: { ...previousState?.terminalMembers },
-        memberChoices: { ...previousState?.memberChoices },
-        reviewFingerprints: { ...previousState?.reviewFingerprints },
-      };
+      const diff = collection.diffs[entry.courseCode];
+      const previousCandidates = yield* readInterpretation(deps.dataDir, entry.courseCode);
+      const changed =
+        previousCandidates === null
+          ? records
+          : diff
+            ? [...diff.added, ...diff.changed.map((change) => change.after)]
+            : [];
       const input = interpretationInput(entry.courseCode, changed, contextDocument);
 
       yield* logEvent("course_ai_started", {
@@ -194,117 +156,49 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
         ),
         Effect.withSpan("nus-sync.course.ai"),
       );
+      const affectedSourceIds = new Set([
+        ...changed.map((record) => record.id),
+        ...(diff?.removed.map((record) => record.id) ?? []),
+      ]);
       const candidates =
         previousCandidates === null
           ? freshCandidates
           : mergeCandidateEnvelopes(previousCandidates, freshCandidates, affectedSourceIds);
-      state.candidates = candidates;
-      const { projected, operations } = yield* Effect.try({
-        try: () => {
-          const facts = applyCourseSchedule(
-            applyTaskDependencies(
-              restoreUserDecisions(
-                mergeCandidateFacts(factsFromRecords(records), candidates.candidates),
-                existing,
-                records,
-                state,
-              ),
-            ),
-          );
-          const projected = selectTrackedTasks(
-            bundleContiguousLectures(
-              facts.map((fact) => projectTask(fact, nowDate)),
-              existing,
-            ).map((task) => planDates(task, nowDate, records)),
-            existing,
-          );
-          const unclaimed = existing.filter(
-            (row) =>
-              row.automatedIdentity &&
-              row.properties.Course === entry.courseCode &&
-              !row.migrationDisposition &&
-              !["Done", "Dropped"].includes(String(row.properties.Status)) &&
-              !state.managed[row.automatedIdentity] &&
-              !projected.some(
-                (task) =>
-                  findExistingAction(existing, task.id, task.sourceIds, task.title)?.id === row.id,
-              ),
-          );
-          if (unclaimed.length)
-            throw new Error(
-              `Unmapped active history requires explicit migration before this course can sync: ${unclaimed.map((row) => row.id).join(", ")}`,
-            );
-          const migrationOperations: Array<ReconcileOperation> = existing
-            .filter(
-              (row) =>
-                row.migrationDisposition === "retire" &&
-                row.properties.Course === entry.courseCode &&
-                row.automatedIdentity &&
-                !row.archived,
-            )
-            .map((row) => ({
-              type: "update",
-              pageId: row.id,
-              identity: row.automatedIdentity!,
-              expectedIdentity: row.automatedIdentity!,
-              expectedProperties: row.properties,
-              archived: true,
-              properties: {},
-            }));
-          const operations = [
-            ...migrationOperations,
-            ...planReconciliation(existing, projected, nowIso),
-            ...reconcileMissing(state, projected, records, existing),
-          ];
-          return { projected, operations };
-        },
-        catch: (cause) => cause,
-      });
+      const facts = applyCourseSchedule(
+        applyTaskDependencies(
+          mergeCandidateFacts(factsFromRecords(records), candidates.candidates).map((fact) => {
+            if (fact.kind === "e-lecture") return fact;
+            const row = findExistingAction(existing, fact.id, fact.sourceIds, fact.title);
+            const status = row?.properties.Status;
+            return isTerminalStatus(status) ? { ...fact, userStatus: status } : fact;
+          }),
+        ),
+      );
+
+      const projected = selectTrackedTasks(
+        bundleContiguousLectures(facts.map((fact) => projectTask(fact, nowDate))).map((task) => {
+          if (task.kind !== "e-lecture") return task;
+          const row = findExistingAction(existing, task.id, task.sourceIds, task.title);
+          const status = row?.properties.Status;
+          return isTerminalStatus(status)
+            ? projectTask({ ...task, userStatus: status }, nowDate)
+            : task;
+        }),
+        existing,
+      );
+      const operations = planReconciliation(existing, projected, nowIso);
       yield* logEvent("course_notion_started", {
         runId: collection.runId,
         course: entry.courseCode,
         operations: operations.length,
       });
-      for (const operation of operations) {
-        const verified = yield* deps.notion.applyAndVerify(operation);
-        const projection = projected.find((task) => task.id === operation.identity);
-        if (projection) {
-          const pageId =
-            operation.type === "update"
-              ? operation.pageId
-              : verified && typeof verified === "object" && "id" in verified
-                ? String(verified.id)
-                : null;
-          if (!pageId)
-            return yield* Effect.fail(new Error("Notion write returned no verified page ID"));
-          state.managed[projection.id] = {
-            pageId,
-            sourceIds: [...projection.sourceIds],
-            missing: 0,
-            lastSeenRun: collection.runId,
-          };
-        }
-      }
-      for (const task of projected) {
-        if (!state.managed[task.id]) {
-          const row = existing.find((action) => action.automatedIdentity === task.id);
-          if (row)
-            state.managed[task.id] = {
-              pageId: row.id,
-              sourceIds: task.sourceIds,
-              missing: 0,
-              lastSeenRun: collection.runId,
-            };
-        }
-        if (state.managed[task.id])
-          state.managed[task.id] = {
-            ...state.managed[task.id]!,
-            sourceIds: [...task.sourceIds],
-            missing: 0,
-            lastSeenRun: collection.runId,
-          };
-      }
-      yield* writeCourseState(deps.dataDir, entry.courseCode, state);
+      yield* Effect.forEach(operations, (operation) => deps.notion.applyAndVerify(operation), {
+        discard: true,
+      }).pipe(Effect.withSpan("nus-sync.course.notion"));
+      yield* writeInterpretation(deps.dataDir, entry.courseCode, candidates);
+      yield* writeBaseline(deps.dataDir, entry.courseCode, records).pipe(
+        Effect.withSpan("nus-sync.course.baseline"),
+      );
 
       entry.stages = {
         ai: input.changedRecords.length || input.referencedDocuments.length ? "success" : "skipped",
@@ -342,11 +236,6 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
     }
   }
 
-  if (deps.notion.syncPlannerViews) {
-    const views = yield* deps.notion.syncPlannerViews(nowDate).pipe(Effect.result);
-    if (Result.isFailure(views))
-      failures.push({ course: "SYSTEM", stage: "views", detail: safeError(views.failure) });
-  }
   const finishedAt = DateTime.formatIso(yield* DateTime.now);
   collection.manifest.finishedAt = finishedAt;
   const health = healthSummary(
@@ -358,19 +247,11 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
   );
 
   yield* logEvent("health_update_started", { runId: collection.runId });
-  const healthUpdate = yield* deps.notion
-    .updateHealthBlock(
-      deps.healthBlockId,
-      failures.some((failure) => failure.course === "SYSTEM") &&
-        !health.startsWith("LAST SYNC FAILED")
-        ? `LAST SYNC FAILED — ${health}; planner view verification failed`
-        : health,
-    )
-    .pipe(
-      Effect.tap(() => logEvent("health_update_finished", { runId: collection.runId })),
-      Effect.result,
-      Effect.withSpan("nus-sync.health"),
-    );
+  const healthUpdate = yield* deps.notion.updateHealthBlock(deps.healthBlockId, health).pipe(
+    Effect.tap(() => logEvent("health_update_finished", { runId: collection.runId })),
+    Effect.result,
+    Effect.withSpan("nus-sync.health"),
+  );
   if (Result.isFailure(healthUpdate)) {
     const detail = safeError(healthUpdate.failure);
     failures.push({ course: "SYSTEM", stage: "health", detail });
@@ -409,8 +290,6 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
     collection.manifest.alert = { status: "skipped" };
   }
 
-  collection.manifest.phase = "completed";
-  collection.manifest.ok = failures.length === 0 && !alertFailed;
   yield* writeJsonAtomic(path.join(collection.snapshotDir, "manifest.json"), collection.manifest);
   return {
     ok: failures.length === 0 && !alertFailed,
@@ -424,9 +303,10 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
 const readContextDocument = Effect.fn("runSync.readContextDocument")(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  return yield* fs
-    .readFileString(path.join(process.cwd(), "docs/context.md"))
-    .pipe(Effect.withSpan("nus-sync.context.read"));
+  return yield* fs.readFileString(path.join(process.cwd(), "docs/context.md")).pipe(
+    Effect.catch(() => Effect.succeed("")),
+    Effect.withSpan("nus-sync.context.read"),
+  );
 });
 
 const lastSuccessfulAt = Effect.fn("runSync.lastSuccessfulAt")(function* (
@@ -435,8 +315,6 @@ const lastSuccessfulAt = Effect.fn("runSync.lastSuccessfulAt")(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const state = yield* readCourseState(dataDir, courseCode).pipe(Effect.orElseSucceed(() => null));
-  if (state) return state.syncedAt;
   const info = yield* fs
     .stat(path.join(dataDir, "baselines", `${courseCode}.json`))
     .pipe(Effect.result);
@@ -471,13 +349,11 @@ function courseContext(document: string, courseCode: CourseCode) {
   const start = document.indexOf(marker);
   if (start < 0) return courseCode;
   const end = document.indexOf("\n#### ", start + marker.length);
-  const timetableStart = document.indexOf("### Timetable and semester rhythm");
-  const timetableEnd = document.indexOf("### Course model", timetableStart);
-  const timetable =
-    timetableStart >= 0 && timetableEnd > timetableStart
-      ? document.slice(timetableStart, timetableEnd)
-      : "";
-  return `${timetable}\n${document.slice(start, end < 0 ? undefined : end)}`;
+  return document.slice(start, end < 0 ? undefined : end);
+}
+
+function isTerminalStatus(status: unknown): status is "Done" | "Dropped" {
+  return status === "Done" || status === "Dropped";
 }
 
 function safeError(error: unknown) {

@@ -52,7 +52,6 @@ export class ResendAlertClient {
     );
     return HttpClientRequest.bodyJson(request, body).pipe(
       Effect.flatMap(this.httpClient.execute),
-      Effect.timeout("30 seconds"),
       Effect.mapError(
         (cause) =>
           new ResendRequestError({

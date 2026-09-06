@@ -1,17 +1,15 @@
-import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
+import { Config, Context, Effect, Layer, Redacted, type Schema } from "effect";
 import {
   announcementListSchema,
   assignmentListSchema,
   fileListSchema,
-  fileSchema,
-  moduleItemSchema,
   moduleListSchema,
   pageBodySchema,
   pageIndexSchema,
   plannerListSchema,
   quizListSchema,
 } from "../../schemas/canvas.schema";
-import { type Course, type CourseEndpoint, SEMESTER_WINDOW } from "../config/courses";
+import type { Course, CourseEndpoint } from "../config/courses";
 import { AppConfig } from "../config/env";
 import { decodeEndpoint, decodeRequired } from "./outcome";
 import { runProcess } from "./process";
@@ -82,16 +80,7 @@ export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient"
       return yield* call(
         course,
         "announcements",
-        [
-          "announcements",
-          "list",
-          "--course-id",
-          courseArgs(course.id),
-          "--start-date",
-          SEMESTER_WINDOW.startDate,
-          "--end-date",
-          SEMESTER_WINDOW.endDate,
-        ],
+        ["announcements", "list", "--course-id", courseArgs(course.id)],
         announcementListSchema,
       );
     });
@@ -121,41 +110,13 @@ export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient"
       );
     });
 
-    const moduleItems = Effect.fn("CanvasClient.moduleItems")(function* (
-      course: Course,
-      moduleId: number,
-    ) {
-      return yield* callRequired(
-        [
-          "modules",
-          "items",
-          "list",
-          "--course-id",
-          String(course.id),
-          "--module-id",
-          String(moduleId),
-          "--include",
-          "content_details",
-        ],
-        Schema.Array(moduleItemSchema),
-      );
-    });
-    const file = Effect.fn("CanvasClient.file")(function* (fileId: number) {
-      const response = yield* callRequired(
-        ["api", "GET", `/api/v1/files/${fileId}`],
-        Schema.Struct({ body: fileSchema, status_code: Schema.Number }),
-      );
-      return response.body;
-    });
-
     const frontPage = Effect.fn("CanvasClient.frontPage")(function* (course: Course) {
-      const response = yield* call(
+      return yield* call(
         course,
         "frontPage",
-        ["api", "GET", `/api/v1/courses/${course.id}/front_page`],
-        Schema.Struct({ body: pageBodySchema, status_code: Schema.Number }),
+        ["pages", "front", "--course-id", courseArgs(course.id)],
+        pageBodySchema,
       );
-      return response.body;
     });
 
     const pagesIndex = Effect.fn("CanvasClient.pagesIndex")(function* (course: Course) {
@@ -168,11 +129,10 @@ export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient"
     });
 
     const pageBody = Effect.fn("CanvasClient.pageBody")(function* (course: Course, url: string) {
-      const response = yield* callRequired(
-        ["api", "GET", `/api/v1/courses/${course.id}/pages/${encodeURIComponent(url)}`],
-        Schema.Struct({ body: pageBodySchema, status_code: Schema.Number }),
+      return yield* callRequired(
+        ["pages", "get", "--course-id", courseArgs(course.id), url],
+        pageBodySchema,
       );
-      return response.body;
     });
 
     const plannerItems = Effect.fn("CanvasClient.plannerItems")(function* (
@@ -203,8 +163,6 @@ export class CanvasClient extends Context.Service<CanvasClient>()("CanvasClient"
     });
 
     return {
-      moduleItems,
-      file,
       assignments,
       quizzes,
       announcements,

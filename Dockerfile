@@ -27,7 +27,7 @@ RUN apt-get update \
 FROM oven/bun:1.4.0-debian
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates poppler-utils unzip \
+    && apt-get install -y --no-install-recommends ca-certificates poppler-utils \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 nus-sync \
     && useradd --uid 10001 --gid 10001 --create-home --home-dir /home/nus-sync nus-sync
@@ -52,4 +52,4 @@ ENV DATA_DIR=/data \
 USER nus-sync
 VOLUME ["/data", "/codex-home"]
 CMD ["bun", "run", "sync"]
-HEALTHCHECK --interval=1m --timeout=10s --start-period=10s --retries=3 CMD ["sh", "-c", "HEALTHCHECK_MODE=artifacts bun run healthcheck"]
+HEALTHCHECK --interval=1m --timeout=10s --start-period=10s --retries=3 CMD ["bun", "run", "healthcheck"]

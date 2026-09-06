@@ -76,12 +76,7 @@ test("canonical projections migrate an exact legacy numeric identity in place", 
       {
         id: "legacy-page",
         automatedIdentity: "262076",
-        properties: {
-          Status: "Done",
-          Action: "Quiz 2",
-          "Canvas Course ID": "94257",
-          "Canvas Item Type": "assessment",
-        },
+        properties: { Status: "Done", Action: "Quiz 2" },
       },
     ],
     [projection],
@@ -93,7 +88,7 @@ test("canonical projections migrate an exact legacy numeric identity in place", 
   expect(operation?.properties).not.toHaveProperty("Status");
 });
 
-test("unscoped legacy names are not guessed from title words", () => {
+test("legacy suffixed identities are matched by meaningful action words without reusing a row", () => {
   const projections = [
     projectTask(
       {
@@ -134,8 +129,8 @@ test("unscoped legacy names are not guessed from title words", () => {
   );
 
   expect(operations.map((operation) => operation.type === "update" && operation.pageId)).toEqual([
-    false,
-    false,
+    "group",
+    "individual",
   ]);
 });
 
@@ -170,106 +165,7 @@ test("new rows are limited to ready or review work while existing history is ret
   expect(
     selectTrackedTasks(
       [ready, locked],
-      [
-        {
-          id: "old",
-          automatedIdentity: "2",
-          properties: {
-            Status: "Waiting",
-            "Canvas Course ID": "97325",
-            "Canvas Item Type": "assessment",
-          },
-        },
-      ],
+      [{ id: "old", automatedIdentity: "2", properties: { Status: "Waiting" } }],
     ),
   ).toEqual([ready, locked]);
-});
-
-test("a retired legacy source row does not block its corrected replacement", () => {
-  const projection = projectTask(
-    {
-      id: "candidate:CS2030S:new-problem-set",
-      courseCode: "CS2030S",
-      kind: "preparation",
-      title: "Prepare Problem Set 3",
-      sourceIds: ["course:93698:document:9900386"],
-      observed: true,
-      authoritativeAction: true,
-    },
-    new Date("2026-09-05T00:00:00Z"),
-  );
-
-  expect(
-    planReconciliation(
-      [
-        {
-          id: "obsolete",
-          automatedIdentity: "course:93698:document:9900386",
-          migrationDisposition: "retire",
-          properties: { Course: "CS2030S", Status: "Dropped" },
-        },
-      ],
-      [projection],
-      "2026-09-05T00:00:00Z",
-    ),
-  ).toEqual([expect.objectContaining({ type: "create", identity: projection.id })]);
-});
-
-test("a retired page is never reused when its obsolete identity is projected again", () => {
-  const projection = projectTask(
-    {
-      id: "course:93698:document:9900386",
-      courseCode: "CS2030S",
-      kind: "preparation",
-      title: "Prepare the corrected problem set",
-      sourceIds: ["course:93698:document:9900386"],
-      observed: true,
-      authoritativeAction: true,
-    },
-    new Date("2026-09-05T00:00:00Z"),
-  );
-
-  expect(
-    planReconciliation(
-      [
-        {
-          id: "obsolete",
-          automatedIdentity: projection.id,
-          migrationDisposition: "retire",
-          properties: { Course: "CS2030S", Status: "Dropped" },
-        },
-      ],
-      [projection],
-      "2026-09-05T00:00:00Z",
-    ),
-  ).toEqual([expect.objectContaining({ type: "create", identity: projection.id })]);
-});
-
-test("terminal legacy history does not claim a different candidate sharing one source", () => {
-  const projection = projectTask(
-    {
-      id: "candidate:CS2030S:problem-set-3",
-      courseCode: "CS2030S",
-      kind: "preparation",
-      title: "Prepare Problem Set 3",
-      sourceIds: ["course:93698:document:9900386", "course:93698:page:cs2030s-schedule"],
-      observed: true,
-      authoritativeAction: true,
-    },
-    new Date("2026-09-05T00:00:00Z"),
-  );
-
-  expect(
-    planReconciliation(
-      [
-        {
-          id: "old-lecture",
-          automatedIdentity: "cs2030s-schedule-week-03-units-13-19",
-          properties: { Course: "CS2030S", Status: "Done" },
-        },
-      ],
-      [projection],
-      "2026-09-05T00:00:00Z",
-    ),
-  ).toEqual([expect.objectContaining({ type: "create", identity: projection.id })]);
 });

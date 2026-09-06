@@ -65,8 +65,6 @@ export type CanvasAnnouncement = typeof announcementSchema.Type;
 export const fileSchema = Schema.Struct({
   id: Schema.Number,
   display_name: Schema.String,
-  locked_for_user: Schema.optional(Schema.Boolean),
-  unlock_at: Schema.optional(nullableDate),
   url: Schema.String,
   updated_at: nullableDate,
 });
@@ -98,7 +96,6 @@ export const moduleSchema = Schema.Struct({
   published: Schema.optional(Schema.Boolean),
   unlock_at: Schema.optional(nullableDate),
   state: Schema.optional(Schema.String),
-  items_count: Schema.optional(Schema.Number),
   items: Schema.optional(Schema.NullOr(Schema.Array(moduleItemSchema))),
 });
 export const moduleListSchema = Schema.Array(moduleSchema);
@@ -120,8 +117,7 @@ export const pageBodySchema = Schema.Struct({
   page_id: Schema.Number,
   url: Schema.String,
   title: Schema.String,
-  body: Schema.optional(Schema.NullOr(Schema.String)),
-  locked_for_user: Schema.optional(Schema.Boolean),
+  body: Schema.NullOr(Schema.String),
   updated_at: nullableDate,
   published: Schema.Boolean,
 });

@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { candidateIdentity } from "../../src/ai/reduce";
 import { mergeCandidateEnvelopes } from "../../src/ai/state";
 import type { CourseCandidate } from "../../src/ai/types";
 
@@ -14,13 +13,6 @@ const candidate = (title: string, sourceIds: Array<string>): CourseCandidate => 
   ambiguity: null,
 });
 
-test("an explicit action key keeps identity stable when supporting sources change", () => {
-  const original = { ...candidate("Project report", ["brief"]), actionKey: "project-report" };
-  const enriched = { ...original, sourceIds: ["brief", "announcement"] };
-
-  expect(candidateIdentity(enriched)).toBe(candidateIdentity(original));
-});
-
 test("unchanged candidates persist while affected candidates are replaced", () => {
   const retained = candidate("Retained", ["source:1"]);
   const replaced = candidate("Old", ["source:2"]);
@@ -32,5 +24,5 @@ test("unchanged candidates persist while affected candidates are replaced", () =
       { candidates: [fresh] },
       new Set(["source:2"]),
     ),
-  ).toEqual({ candidates: [retained, expect.objectContaining(fresh)] });
+  ).toEqual({ candidates: [retained, fresh] });
 });

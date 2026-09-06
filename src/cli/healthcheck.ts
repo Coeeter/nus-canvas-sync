@@ -1,8 +1,6 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
-import { Config, Console, DateTime, Effect, FileSystem, Predicate, Schema } from "effect";
+import { Console, Effect, FileSystem, Predicate } from "effect";
 import { runProcess } from "../collector/process";
-import { COURSES } from "../config/courses";
-import { readCourseState } from "../state/course-store";
 
 const expected = [
   ["canvas", ["--version"], "canvas-cli version 1.13.0"],
@@ -33,26 +31,7 @@ const program = Effect.gen(function* () {
       return yield* Effect.fail(new Error(`Missing runtime file: ${file}`));
   }
 
-  const mode = yield* Config.string("HEALTHCHECK_MODE").pipe(Config.withDefault("sync"));
-  if (mode !== "artifacts") {
-    const dataDir = yield* Config.string("DATA_DIR").pipe(Config.withDefault("./data"));
-    const maxAge = yield* Config.number("HEALTHCHECK_MAX_AGE_HOURS").pipe(Config.withDefault(12));
-    const now = DateTime.toEpochMillis(yield* DateTime.now);
-    const status = yield* Schema.decodeUnknownEffect(
-      Schema.fromJsonString(Schema.Struct({ ok: Schema.Boolean, finishedAt: Schema.String })),
-    )(yield* fs.readFileString(`${dataDir}/run-status.json`));
-    if (!status.ok) return yield* Effect.fail(new Error("Last sync failed"));
-    for (const course of COURSES) {
-      const state = yield* readCourseState(dataDir, course.code);
-      if (
-        !state ||
-        !Number.isFinite(Date.parse(state.syncedAt)) ||
-        now - Date.parse(state.syncedAt) > maxAge * 3600_000
-      )
-        return yield* Effect.fail(new Error(`No fresh successful sync for ${course.code}`));
-    }
-  }
-  yield* Console.log(JSON.stringify({ event: "healthcheck", ok: true, mode }));
+  yield* Console.log(JSON.stringify({ event: "healthcheck", ok: true }));
 }).pipe(Effect.provide(BunServices.layer));
 
 BunRuntime.runMain(program);

@@ -2,8 +2,5 @@ snapshots/
 latest
 node_modules/
 .repos/
-.local/
 *.tsbuildinfo
 .DS_Store
-
-data/

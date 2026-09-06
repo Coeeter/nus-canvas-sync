@@ -25,14 +25,12 @@ export function selectRelevantFiles(
 ): Array<CanvasFile> {
   return files.filter((file) => {
     if (RECOGNISABLE_FILENAME.test(file.display_name)) return true;
-    const filename = file.display_name.toLowerCase();
-    const stem = filename.replace(/\.[^.]+$/, "");
+    const nameWithoutExtension = file.display_name.replace(/\.[^.]+$/, "").toLowerCase();
     return changedProse.some(
       (prose) =>
         prose.includes(`/files/${file.id}`) ||
-        (file.url.trim() !== "" && prose.includes(file.url)) ||
-        prose.toLowerCase().includes(filename) ||
-        (/\s/.test(stem) && prose.toLowerCase().includes(stem)),
+        prose.includes(file.url) ||
+        prose.toLowerCase().includes(nameWithoutExtension),
     );
   });
 }
@@ -43,25 +41,22 @@ export function hasDownloadableUrl(file: CanvasFile): boolean {
 }
 
 export function isExtractableDocument(file: CanvasFile): boolean {
-  return /\.(?:pdf|txt|md|docx)$/i.test(file.display_name);
+  return /\.(?:pdf|txt|md)$/i.test(file.display_name);
 }
 
 export function referencedByForFile(
   file: CanvasFile,
   records: ReadonlyArray<NormalizedRecord>,
 ): Array<string> {
-  const filename = file.display_name.toLowerCase();
-  const stem = filename.replace(/\.[^.]+$/, "");
+  const nameWithoutExtension = file.display_name.replace(/\.[^.]+$/, "").toLowerCase();
   return records
     .filter((record) => {
       const value = JSON.stringify(record.fields);
       return (
         value.includes(`/files/${file.id}`) ||
-        (file.url.trim() !== "" && value.includes(sanitizeSourceText(file.url))) ||
-        (record.kind === "module" && value.includes(`"contentId":${file.id}`)) ||
+        value.includes(sanitizeSourceText(file.url)) ||
         ((record.kind === "announcement" || record.kind === "assignment") &&
-          (value.toLowerCase().includes(filename) ||
-            (/\s/.test(stem) && value.toLowerCase().includes(stem))))
+          value.toLowerCase().includes(nameWithoutExtension))
       );
     })
     .map((record) => record.id)
@@ -85,14 +80,6 @@ export const downloadAndExtract = Effect.fn("downloadAndExtract")(function* (
         new TaskAffectingFailureError({
           command: `download ${file.url}`,
           message: error.message,
-        }),
-    ),
-    Effect.timeout("60 seconds"),
-    Effect.mapError(
-      () =>
-        new TaskAffectingFailureError({
-          command: `download file ${file.id}`,
-          message: "Document download failed or timed out",
         }),
     ),
     Effect.provide(FetchHttpClient.layer),
@@ -126,23 +113,7 @@ const toDocumentError =
 const extractText = Effect.fn("extractText")(function* (path: string, displayName: string) {
   if (/\.(txt|md)$/i.test(displayName)) {
     const fs = yield* FileSystem.FileSystem;
-    return yield* fs.readFileString(path);
-  }
-  if (/\.docx$/i.test(displayName)) {
-    const result = yield* runProcess("unzip", ["-p", path, "word/document.xml"], {
-      PATH: process.env.PATH ?? "",
-    });
-    if (result.exitCode !== 0)
-      return yield* new TaskAffectingFailureError({
-        command: "unzip DOCX",
-        message: result.stderr.slice(0, 500),
-      });
-    return result.stdout
-      .replace(/<\/w:p>/g, "\n")
-      .replace(/<[^>]+>/g, "")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">");
+    return yield* Effect.orElseSucceed(fs.readFileString(path), () => null);
   }
   if (/\.pdf$/i.test(displayName)) {
     const result = yield* runProcess("pdftotext", [path, "-"], {

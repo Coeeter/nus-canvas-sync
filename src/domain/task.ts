@@ -11,7 +11,7 @@ export type TaskState =
   | "expired"
   | "review"
   | "inactive";
-export type UserStatus = "Not started" | "Doing" | "Waiting" | "Done" | "Dropped";
+export type UserStatus = "Not started" | "In progress" | "Done" | "Dropped";
 
 export interface TaskFact {
   id: string;
@@ -26,14 +26,6 @@ export interface TaskFact {
   dueAt?: string | null;
   eventEndsAt?: string | null;
   completed?: boolean;
-  inProgress?: boolean;
-  lockedForUser?: boolean;
-  published?: boolean;
-  lockAt?: string | null;
-  instructions?: string;
-  sourceFingerprint?: string;
-  startBy?: string | null;
-  planned?: string | null;
   scheduled?: boolean;
   workMode?: "Flexible" | "Before class" | "During class" | "Online";
   blockedBy?: string | null;

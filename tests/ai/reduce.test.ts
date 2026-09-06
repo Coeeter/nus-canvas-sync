@@ -16,7 +16,7 @@ const candidate = (overrides: Partial<CourseCandidate>): CourseCandidate => ({
 });
 
 test("AI cadence text cannot release an assessment", () => {
-  expect(projectTask(candidateToFact(candidate({})), new Date()).state).toBe("review");
+  expect(projectTask(candidateToFact(candidate({})), new Date()).state).toBe("expected");
 });
 
 test("ambiguous or low-confidence candidates enter review", () => {
@@ -96,7 +96,7 @@ test("AI does not add a second bundle over deterministic module lessons", () => 
   expect(facts).toHaveLength(2);
 });
 
-test("a distinct candidate cannot overwrite a deterministic preparation fact", () => {
+test("model uncertainty cannot turn a deterministic source-backed fact into review", () => {
   const facts = mergeCandidateFacts(
     [
       {
@@ -119,40 +119,7 @@ test("a distinct candidate cannot overwrite a deterministic preparation fact", (
     ],
   );
 
-  expect(facts).toHaveLength(2);
-  expect(facts[1]?.conflict).toBeDefined();
+  expect(facts).toHaveLength(1);
   expect(facts[0]?.conflict).toBeUndefined();
   expect(facts[0]?.title).toBe("Prepare GEA1000 Tutorial 2 questions");
-});
-
-test("MA1301 keeps one preparation action when AI describes the same weekly page", () => {
-  const source = "course:97359:page:week-5";
-  const facts = mergeCandidateFacts(
-    [
-      {
-        id: source,
-        courseCode: "MA1301",
-        kind: "preparation",
-        title: "MA1301 Week 5 preparation",
-        sourceIds: [source],
-        observed: true,
-        authoritativeAction: true,
-      },
-    ],
-    [
-      candidate({
-        courseCode: "MA1301",
-        kind: "preparation",
-        sourceIds: [source],
-        actionKey: "week-5-preclass-preparation",
-        relationship: "action",
-        title: "Week 5 pre-class preparation",
-        requiredAction: "Attempt the assigned exercises",
-      }),
-    ],
-  );
-
-  expect(facts).toHaveLength(1);
-  expect(facts[0]?.id).toBe(source);
-  expect(facts[0]?.instructions).toContain("Attempt the assigned exercises");
 });

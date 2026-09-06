@@ -11,8 +11,7 @@ cron daemon.
 
 Mount:
 
-- `/data` for immutable snapshots, atomic per-course state, pending-create
-  recovery journals, run status, and the run lock;
+- `/data` for immutable snapshots, per-course successful baselines, and the run lock;
 - `/codex-home` for the dedicated Codex login (`CODEX_HOME`). Treat its
   `auth.json` as password-equivalent.
 
@@ -80,32 +79,14 @@ This runs at 07:00, 12:00, 17:00, and 22:00. Do not add a 03:00 run.
 
 ## First run and verification
 
-1. Stop every old scheduled/manual sync before replacing an image that used the
-   previous create/unlink lock. The current process uses `flock`; never unlink
-   `/data/run.lock`, because doing so can create two independently locked inodes.
-2. Pull the immutable SHA tag produced by CI and run
-   `HEALTHCHECK_MODE=artifacts bun run healthcheck`. The default healthcheck is
-   expected to fail before the first successful state-bearing sync.
-3. Run `bun run collect` once and inspect the generated manifest. Every required
+1. Pull the immutable SHA tag produced by CI and run `bun run healthcheck`.
+2. Run `bun run collect` once and inspect the generated manifest. Every required
    endpoint must be `ok` or a declared capability gap with successful alternates.
-4. Review `config/notion-identity-migrations.json` against the current live page
-   IDs. Back up `/data` before the first migration-bearing run.
-5. Run `bun run sync` manually. Confirm concise `sync_finished` JSON, the five
+3. Run `bun run sync` manually. Confirm concise `sync_finished` JSON, the five
    per-course outcomes, Review-first behavior, and the dashboard health callout.
-6. Confirm `/data/courses` contains five course files only after successful
-   verified reconciliation. A failed course must retain its previous state.
-   If `/data/pending-creates` contains an entry, do not repeat creates blindly:
-   resolve whether Notion committed that identity first.
-7. Run the default `bun run healthcheck`; it must verify the successful run and
-   fresh state for all five courses.
-8. Enable the four Dokploy schedules only after that manual run succeeds.
-
-The image healthcheck uses `HEALTHCHECK_MODE=artifacts` because the Application
-container is an idle job host. A state-aware healthcheck can kill an in-progress
-sync after a failed or absent previous run, preventing that run from repairing
-the state. Use the default `bun run healthcheck` explicitly to verify operational
-sync freshness; sync failures also update `run-status.json`, the Notion health
-callout, and Resend alerts.
+4. Confirm `/data/baselines` contains five course files only after successful
+   verified reconciliation. A failed course must retain its earlier mtime.
+5. Enable the four Dokploy schedules only after that manual run succeeds.
 
 Rollback is to disable the Dokploy schedule and pin the previous working image
 SHA. The paused legacy automation stays paused unless Nas explicitly chooses to

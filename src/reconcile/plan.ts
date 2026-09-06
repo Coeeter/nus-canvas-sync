@@ -13,31 +13,17 @@ export const AGENT_OWNED_FIELDS = [
   "Source URL",
   "Last Synced",
   "Blocked By",
-  "Type",
-  "Work Mode",
-  "Source State",
-  "Missing Syncs",
-  "Start By",
 ] as const;
 
 export interface ExistingAction {
   id: string;
   automatedIdentity: string | null;
   properties: Record<string, unknown>;
-  archived?: boolean;
-  editedAt?: string;
-  migrationDisposition?: "retire" | "preserve";
 }
 
-export type ReconcileOperation = (
+export type ReconcileOperation =
   | { type: "create"; identity: string; properties: Record<string, unknown> }
-  | { type: "update"; pageId: string; identity: string; properties: Record<string, unknown> }
-) & {
-  expectedIdentity?: string;
-  expectedProperties?: Record<string, unknown>;
-  archived?: boolean;
-  managedNotes?: string;
-};
+  | { type: "update"; pageId: string; identity: string; properties: Record<string, unknown> };
 
 export function planReconciliation(
   existing: ReadonlyArray<ExistingAction>,
@@ -46,7 +32,7 @@ export function planReconciliation(
 ): Array<ReconcileOperation> {
   const claimedPageIds = new Set<string>();
   return projections.flatMap((projection) => {
-    const properties: Record<string, unknown> = projectionProperties(projection, syncedAt);
+    const properties = projectionProperties(projection, syncedAt);
     const current = findExistingAction(
       existing,
       projection.id,
@@ -54,72 +40,19 @@ export function planReconciliation(
       projection.title,
       claimedPageIds,
     );
-    if (!current && projection.id.startsWith("candidate:")) {
-      const collision = existing.find(
-        (row) =>
-          row.automatedIdentity &&
-          row.migrationDisposition !== "retire" &&
-          !["Done", "Dropped"].includes(String(row.properties.Status)) &&
-          row.properties.Course === projection.courseCode &&
-          !row.automatedIdentity.startsWith("candidate:") &&
-          projection.sourceIds.some(
-            (id) =>
-              row.automatedIdentity === id ||
-              legacyIdentityAliases(id).some(
-                (alias) =>
-                  row.automatedIdentity === alias || row.automatedIdentity?.startsWith(`${alias}-`),
-              ),
-          ),
-      );
-      if (collision)
-        throw new Error(
-          `Explicit legacy action mapping required for ${projection.id}; existing page ${collision.id}`,
-        );
-    }
-    if (current) {
-      claimedPageIds.add(current.id);
-      if (current.properties.Status === "Done" || current.properties.Status === "Dropped") {
-        delete properties.Status;
-        properties.Readiness = current.properties.Status === "Done" ? "Completed" : "Later";
-        properties["Needs Review"] = false;
-      }
-      if (current.properties.Pinned === true) delete properties.Planned;
-    }
-    const managedNotes = [projection.instructions, projection.reason].filter(Boolean).join("\n\n");
-    if (
-      current &&
-      !current.archived &&
-      !managedNotes &&
-      propertiesEqual(current.properties, properties)
-    )
-      return [];
+    if (current) claimedPageIds.add(current.id);
+    if (current && propertiesEqual(current.properties, properties)) return [];
     return [
       current
-        ? {
-            type: "update" as const,
-            pageId: current.id,
-            identity: projection.id,
-            properties,
-            expectedIdentity: String(
-              current.properties["Canvas Item ID"] ?? current.automatedIdentity,
-            ),
-            expectedProperties: current.properties,
-            archived: false,
-            ...(managedNotes ? { managedNotes } : {}),
-          }
+        ? { type: "update" as const, pageId: current.id, identity: projection.id, properties }
         : ({
             type: "create",
             identity: projection.id,
             properties: {
               ...properties,
               Action: projection.title,
-              Status:
-                projection.state === "done"
-                  ? "Done"
-                  : projection.inProgress
-                    ? "Doing"
-                    : "Not started",
-              ...(managedNotes ? { Notes: managedNotes } : {}),
+              Status: projection.state === "done" ? "Done" : "Not started",
+              ...(projection.needsReview && projection.reason ? { Notes: projection.reason } : {}),
             },
           } as const),
     ];
@@ -130,34 +63,33 @@ export function findExistingAction(
   existing: ReadonlyArray<ExistingAction>,
   identity: string,
   sourceIds: ReadonlyArray<string>,
-  _title?: string,
+  title?: string,
   excludedPageIds: ReadonlySet<string> = new Set(),
 ) {
-  const available = existing.filter(
-    (row) =>
-      !excludedPageIds.has(row.id) &&
-      row.automatedIdentity &&
-      row.migrationDisposition !== "retire",
-  );
-  const exact = available.filter((row) => row.automatedIdentity === identity);
-  if (exact.length > 1) throw new Error(`Duplicate automated identity: ${identity}`);
-  if (exact[0]) return exact[0];
-  if (!/^course:\d+:(assignment|quiz|module):/.test(identity)) return undefined;
-  const courseId = [identity, ...sourceIds]
-    .map((id) => id.match(/^course:(\d+):/)?.[1])
-    .find(Boolean);
+  const available = existing.filter((row) => !excludedPageIds.has(row.id));
+  const exact = available.find((row) => row.automatedIdentity === identity);
+  if (exact) return exact;
   const aliases = [identity, ...sourceIds].flatMap(legacyIdentityAliases);
   const candidates = available.filter(
     (row) =>
-      String(row.properties["Canvas Course ID"]) === courseId &&
-      aliases.includes(row.automatedIdentity!) &&
-      /^(assessment|assignment|quiz|preparation|e-lecture)$/i.test(
-        String(row.properties["Canvas Item Type"] ?? ""),
+      row.automatedIdentity !== null &&
+      aliases.some(
+        (alias) =>
+          row.automatedIdentity === alias || row.automatedIdentity?.startsWith(`${alias}-`),
       ),
   );
-  if (candidates.length > 1)
-    throw new Error(`Ambiguous legacy identities for ${identity}; explicit migration required`);
-  return candidates[0];
+  const titleTokens = meaningfulTokens(title ?? "");
+  return candidates.sort((left, right) => {
+    const score = (row: ExistingAction) => {
+      const identityTokens = meaningfulTokens(row.automatedIdentity ?? "");
+      const actionTokens = meaningfulTokens(String(row.properties.Action ?? ""));
+      const identityOverlap = identityTokens.filter((token) => titleTokens.includes(token)).length;
+      const actionOverlap = actionTokens.filter((token) => titleTokens.includes(token)).length;
+      const exactAlias = aliases.includes(row.automatedIdentity ?? "") ? 1 : 0;
+      return identityOverlap * 10 + actionOverlap * 5 + exactAlias;
+    };
+    return score(right) - score(left);
+  })[0];
 }
 
 export function selectTrackedTasks(
@@ -167,7 +99,6 @@ export function selectTrackedTasks(
   return tasks.filter(
     (task) =>
       task.state === "ready" ||
-      task.state === "scheduled" ||
       task.state === "review" ||
       findExistingAction(existing, task.id, task.sourceIds, task.title) !== undefined,
   );
@@ -182,11 +113,28 @@ function legacyIdentityAliases(identity: string): Array<string> {
   return source ? [source] : [];
 }
 
+const IDENTITY_STOP_WORDS = new Set([
+  "action",
+  "assignment",
+  "create",
+  "prepare",
+  "preparation",
+  "review",
+  "task",
+  "the",
+  "write",
+]);
+
+function meaningfulTokens(value: string) {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2 && !IDENTITY_STOP_WORDS.has(token));
+}
+
 function propertiesEqual(current: Record<string, unknown>, desired: Record<string, unknown>) {
   return Object.entries(desired).every(
-    ([name, value]) =>
-      name === "Last Synced" ||
-      JSON.stringify(current[name] ?? null) === JSON.stringify(value ?? null),
+    ([name, value]) => JSON.stringify(current[name] ?? null) === JSON.stringify(value ?? null),
   );
 }
 
@@ -204,11 +152,6 @@ function projectionProperties(projection: TaskProjection, syncedAt: string) {
     "Source URL": projection.sourceUrl ?? null,
     "Last Synced": syncedAt,
     "Blocked By": projection.blockedBy ?? null,
-    "Source State": "Active",
-    "Missing Syncs": 0,
-    ...(projection.startBy !== undefined ? { "Start By": projection.startBy } : {}),
-    ...(projection.planned !== undefined ? { Planned: projection.planned } : {}),
-    ...(projection.inProgress && !projection.userStatus ? { Status: "Doing" } : {}),
     Type: projection.needsReview
       ? "Review"
       : projection.kind === "assessment"

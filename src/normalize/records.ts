@@ -82,8 +82,6 @@ export function normalizeAnnouncement(course: Course, raw: CanvasAnnouncement) {
 export function normalizeFile(course: Course, raw: CanvasFile) {
   return record(course, "file", raw.id, raw.url, {
     displayName: raw.display_name,
-    lockedForUser: raw.locked_for_user ?? false,
-    unlockAt: normalizeDate(raw.unlock_at),
     updatedAt: normalizeDate(raw.updated_at),
   });
 }
@@ -126,8 +124,7 @@ export function normalizePage(course: Course, raw: CanvasPageBody) {
     `https://canvas.nus.edu.sg/courses/${course.id}/pages/${raw.url}`,
     {
       title: raw.title,
-      body: raw.body ?? null,
-      lockedForUser: raw.locked_for_user ?? false,
+      body: raw.body,
       updatedAt: normalizeDate(raw.updated_at),
       published: raw.published,
     },

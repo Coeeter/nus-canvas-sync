@@ -1,8 +1,5 @@
 import { Schema } from "effect";
 import { TaskAffectingFailureError } from "../errors";
-import { validSourceDate } from "../normalize/dates";
-import type { NormalizedRecord } from "../normalize/types";
-import { assertUniqueCandidateIdentities } from "./reduce";
 import type { CandidateEnvelope } from "./types";
 
 export const CandidateEnvelopeSchema = Schema.Struct({
@@ -11,9 +8,6 @@ export const CandidateEnvelopeSchema = Schema.Struct({
       courseCode: Schema.Literals(["CS2030S", "GEA1000", "GESS1001", "IS1128", "MA1301"]),
       sourceIds: Schema.NonEmptyArray(Schema.String),
       evidence: Schema.NonEmptyString,
-      actionKey: Schema.optional(Schema.NonEmptyString),
-      identity: Schema.optional(Schema.String),
-      relationship: Schema.optional(Schema.Literals(["action", "enrichment"])),
       kind: Schema.Literals([
         "assessment",
         "preparation",
@@ -32,54 +26,19 @@ export const CandidateEnvelopeSchema = Schema.Struct({
   ),
 });
 const decodeCandidateEnvelope = Schema.decodeUnknownSync(CandidateEnvelopeSchema);
-const normalizeEvidence = (value: string) =>
-  value
-    .replace(/<\/?[A-Za-z][^>]*>/g, " ")
-    .replace(/&nbsp;|&#160;/gi, " ")
-    .replace(/\\[nr]|\s+/g, " ")
-    .replace(/\s+([.,;:!?])/g, "$1")
-    .trim()
-    .toLowerCase();
 
 export function validateCandidates(
   raw: unknown,
   courseCode: string,
   allowedSourceIds: ReadonlySet<string>,
-  records?: ReadonlyArray<NormalizedRecord>,
 ) {
   const envelope: CandidateEnvelope = decodeCandidateEnvelope(raw);
   for (const candidate of envelope.candidates) {
-    if (records && candidate.identity) throw invalid("model may not assign persisted identities");
     if (candidate.courseCode !== courseCode) {
       throw invalid("candidate crossed the one-course boundary");
     }
     if (candidate.sourceIds.some((id) => !allowedSourceIds.has(id))) {
       throw invalid("candidate cites an unavailable source identity");
-    }
-    if (
-      [candidate.availableFrom, candidate.dueAt, candidate.eventEndsAt].some(
-        (value) => value != null && !validSourceDate(value),
-      )
-    )
-      throw invalid("candidate contains an invalid date");
-    if (records) {
-      const cited = candidate.sourceIds.flatMap((id) =>
-        records.filter((record) => record.id === id),
-      );
-      const evidence = normalizeEvidence(candidate.evidence);
-      const evidenced = cited.filter((record) =>
-        normalizeEvidence(JSON.stringify(record.fields)).includes(evidence),
-      );
-      if (evidenced.length === 0)
-        throw invalid("candidate evidence is not a verbatim excerpt of its cited sources");
-      if (
-        candidate.kind === "assessment" &&
-        candidate.relationship === "action" &&
-        evidenced.every((record) => record.kind === "assignment" || record.kind === "quiz")
-      )
-        throw invalid(
-          "a candidate evidenced only by its dedicated assessment must use relationship=enrichment",
-        );
     }
     if (
       typeof candidate.confidence !== "number" ||
@@ -89,7 +48,6 @@ export function validateCandidates(
       throw invalid("candidate confidence is outside 0..1");
     }
   }
-  assertUniqueCandidateIdentities(envelope.candidates);
   return envelope;
 }
 
