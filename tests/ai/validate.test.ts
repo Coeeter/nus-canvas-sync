@@ -1,6 +1,37 @@
 import { expect, test } from "bun:test";
+import type { CourseCandidate } from "../../src/ai/types";
 import { validateCandidates } from "../../src/ai/validate";
 import type { NormalizedRecord } from "../../src/normalize/types";
+
+test("candidate keys are unique across sources within the course and kind", () => {
+  const records: Array<NormalizedRecord> = ["a", "b"].map((slug) => ({
+    id: `course:97325:page:${slug}`,
+    courseCode: "IS1128",
+    kind: "page",
+    sourceUrl: null,
+    contentHash: slug,
+    fields: { body: "Read the chapter." },
+  }));
+  const candidates = records.map(
+    (record): CourseCandidate => ({
+      courseCode: "IS1128",
+      sourceIds: [record.id],
+      actionKey: "read-chapter",
+      evidence: "Read the chapter.",
+      kind: "preparation",
+      title: "Read chapter",
+      requiredAction: "Read the chapter",
+      availableFrom: null,
+      dueAt: null,
+      eventEndsAt: null,
+      confidence: 1,
+      ambiguity: null,
+    }),
+  );
+  expect(() =>
+    validateCandidates({ candidates }, "IS1128", new Set(records.map((r) => r.id)), records),
+  ).toThrow("duplicate candidate action identity");
+});
 
 test("verbatim evidence survives harmless HTML boundaries around punctuation", () => {
   const record = {

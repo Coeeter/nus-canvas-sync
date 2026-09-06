@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { TaskFact } from "../domain/task";
+import { TaskAffectingFailureError } from "../errors";
 import type { CourseCandidate } from "./types";
 
 export function candidateIdentity(candidate: CourseCandidate): string {
@@ -14,6 +15,19 @@ export function candidateIdentity(candidate: CourseCandidate): string {
         },
   );
   return `candidate:${candidate.courseCode}:${createHash("sha256").update(key).digest("hex").slice(0, 20)}`;
+}
+
+export function assertUniqueCandidateIdentities(candidates: ReadonlyArray<CourseCandidate>) {
+  const identities = new Set<string>();
+  for (const candidate of candidates) {
+    const identity = candidateIdentity(candidate);
+    if (identities.has(identity))
+      throw new TaskAffectingFailureError({
+        command: "validate candidate identities",
+        message: `duplicate candidate action identity: ${identity}; combine evidence for the same action or use distinct actionKeys for distinct work`,
+      });
+    identities.add(identity);
+  }
 }
 
 export function candidateToFact(candidate: CourseCandidate): TaskFact {
@@ -53,6 +67,8 @@ export function mergeCandidateFacts(
   deterministic: ReadonlyArray<TaskFact>,
   candidates: ReadonlyArray<CourseCandidate>,
 ): Array<TaskFact> {
+  // Fresh output can also collide with retained candidates or migrated identities.
+  assertUniqueCandidateIdentities(candidates);
   const facts = deterministic.map((fact) => ({ ...fact, sourceIds: [...fact.sourceIds] }));
   for (const candidate of candidates) {
     const proposed = candidateToFact(candidate);

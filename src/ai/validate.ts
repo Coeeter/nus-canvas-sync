@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { TaskAffectingFailureError } from "../errors";
 import { validSourceDate } from "../normalize/dates";
 import type { NormalizedRecord } from "../normalize/types";
+import { assertUniqueCandidateIdentities } from "./reduce";
 import type { CandidateEnvelope } from "./types";
 
 export const CandidateEnvelopeSchema = Schema.Struct({
@@ -47,15 +48,7 @@ export function validateCandidates(
   records?: ReadonlyArray<NormalizedRecord>,
 ) {
   const envelope: CandidateEnvelope = decodeCandidateEnvelope(raw);
-  const keys = new Set<string>();
   for (const candidate of envelope.candidates) {
-    const key = JSON.stringify([
-      candidate.kind,
-      [...candidate.sourceIds].sort(),
-      candidate.actionKey ?? candidate.title,
-    ]);
-    if (keys.has(key)) throw invalid("duplicate candidate action identity");
-    keys.add(key);
     if (records && candidate.identity) throw invalid("model may not assign persisted identities");
     if (candidate.courseCode !== courseCode) {
       throw invalid("candidate crossed the one-course boundary");
@@ -96,6 +89,7 @@ export function validateCandidates(
       throw invalid("candidate confidence is outside 0..1");
     }
   }
+  assertUniqueCandidateIdentities(envelope.candidates);
   return envelope;
 }
 

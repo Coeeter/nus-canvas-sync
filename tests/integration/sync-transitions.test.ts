@@ -316,3 +316,77 @@ test("completing a lecture bundle never reintroduces its weeks when the next wee
     await h.close();
   }
 });
+
+test("colliding fresh or retained candidates fail before writes and preserve the last generation", async () => {
+  const h = await harness();
+  try {
+    const sources = ["a", "b"].map((slug) =>
+      record(`course:97325:page:${slug}`, "page", { body: `Read chapter ${slug}.` }),
+    );
+    const candidates = sources.map(
+      (source): CourseCandidate => ({
+        courseCode: "IS1128",
+        kind: "preparation",
+        actionKey: "read-chapter",
+        title: String(source.fields.body),
+        requiredAction: String(source.fields.body),
+        evidence: String(source.fields.body),
+        sourceIds: [source.id],
+        confidence: 1,
+        ambiguity: null,
+      }),
+    );
+    const freshCollision = await h.step(sources, candidates);
+    expect(freshCollision.ok).toBe(false);
+    expect(freshCollision.failures[0]?.detail).toContain("duplicate candidate action identity");
+    expect(h.server.values()).toHaveLength(0);
+    expect(await run(readCourseState(h.dir, "IS1128"))).toBeNull();
+
+    expect((await h.step([sources[0]!], [candidates[0]!])).ok).toBe(true);
+    const previous = await run(readCourseState(h.dir, "IS1128"));
+    const pages = h.server.values();
+    const retainedCollision = await h.step(sources, [candidates[1]!]);
+    expect(retainedCollision.ok).toBe(false);
+    expect(retainedCollision.failures[0]?.detail).toContain("duplicate candidate action identity");
+    expect(h.server.values()).toEqual(pages);
+    expect(await run(readCourseState(h.dir, "IS1128"))).toEqual(previous);
+
+    expect(
+      (await h.step(sources, [{ ...candidates[1]!, actionKey: "chapter-b-reading" }])).ok,
+    ).toBe(true);
+    expect(h.server.values()).toHaveLength(2);
+    expect(new Set(h.server.values().map((page) => page.properties["Canvas Item ID"])).size).toBe(
+      2,
+    );
+  } finally {
+    await h.close();
+  }
+});
+
+test("inline assignment briefs persist runway while pinned planning remains user-owned", async () => {
+  const h = await harness();
+  try {
+    const source = record(assignment().id, "assignment", {
+      ...assignment().fields,
+      name: "Group report",
+      description: "<p>Write a group research report.</p>",
+      dueAt: "2026-09-19T15:59:00Z",
+    });
+    expect((await h.step([source])).ok).toBe(true);
+    const page = h.server.values()[0]!;
+    expect(page.properties).toMatchObject({ "Start By": "2026-09-05", Planned: "2026-09-05" });
+    h.server.put(page.id, { ...page.properties, Pinned: true, Planned: "2026-09-07" });
+    const revised = record(source.id, "assignment", {
+      ...source.fields,
+      dueAt: "2026-09-18T15:59:00Z",
+    });
+    expect((await h.step([revised])).ok).toBe(true);
+    expect(h.server.values()[0]?.properties).toMatchObject({
+      "Start By": "2026-09-04",
+      Planned: "2026-09-07",
+      Pinned: true,
+    });
+  } finally {
+    await h.close();
+  }
+});

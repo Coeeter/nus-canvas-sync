@@ -141,16 +141,29 @@ export function planDates(
     const weekday = new Date(today.getTime() + 8 * 3600_000).getUTCDay();
     return { ...task, planned: sgt(new Date(today.getTime() + ((7 - weekday) % 7) * 86400_000)) };
   }
-  // Runway uses the collected brief itself, not the model's abbreviated action.
+  // Briefs may be inline Canvas prose or extracted attachments. Use their bodies,
+  // not titles, link attributes, or the model's abbreviated action.
   const brief = records
     .filter(
       (record) =>
-        record.kind === "document" &&
+        record.courseCode === task.courseCode &&
         (task.sourceIds.includes(record.id) ||
           (Array.isArray(record.fields.referencedBy) &&
             record.fields.referencedBy.some((id) => task.sourceIds.includes(id)))),
     )
-    .map((record) => String(record.fields.text ?? ""))
+    .map((record) => {
+      const body =
+        record.kind === "document"
+          ? record.fields.text
+          : record.kind === "assignment" || record.kind === "quiz"
+            ? record.fields.description
+            : record.kind === "page"
+              ? record.fields.body
+              : record.kind === "announcement"
+                ? record.fields.message
+                : null;
+      return typeof body === "string" ? body.replace(/<\/?[A-Za-z][^>]*>/g, " ").trim() : "";
+    })
     .join("\n");
   if (task.kind === "assessment" && task.dueAt && brief.trim()) {
     const days = /group|team|multi.stage/i.test(brief)
@@ -159,7 +172,8 @@ export function planDates(
         ? 7
         : 3;
     const start = new Date(sourceDate(task.dueAt).getTime() - days * 86400_000);
-    return { ...task, startBy: sgt(start), ...(now >= start ? { planned: sgt(now) } : {}) };
+    const startBy = sgt(start);
+    return { ...task, startBy, ...(sgt(now) >= startBy ? { planned: sgt(now) } : {}) };
   }
   return task;
 }
