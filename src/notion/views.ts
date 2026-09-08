@@ -108,8 +108,8 @@ export const syncPlannerViews = Effect.fn("NotionClient.syncPlannerViews")(funct
       return Object.fromEntries(
         Object.entries(value).map(([key, item]) => [
           key,
-          key === "property" && typeof item === "string"
-            ? (schema.properties[item]?.id ?? item)
+          key === "property" && typeof item === "string" && schema.properties[item]
+            ? decodeURIComponent(schema.properties[item].id)
             : resolve(item),
         ]),
       );
