@@ -56,6 +56,7 @@ test("one course failure retains only its baseline and sends one alert", async (
       notion: {
         listExistingActions: () => Effect.succeed([]),
         applyAndVerify: () => Effect.fail(new Error("unexpected write")),
+        syncPlannerViews: () => Effect.void,
         updateHealthBlock: () => Effect.void,
       },
       interpret: (input) =>

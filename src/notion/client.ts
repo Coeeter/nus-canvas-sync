@@ -2,6 +2,7 @@ import { Effect, Redacted, Schedule, Schema } from "effect";
 import { type HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 import type { ExistingAction, ReconcileOperation } from "../reconcile/plan";
 import { decodeNotionProperties, encodeNotionProperties, readNotionText } from "./properties";
+import { syncPlannerViews } from "./views";
 
 const NOTION_VERSION = "2025-09-03";
 
@@ -53,6 +54,10 @@ export class NotionClient {
 
   queryActions() {
     return queryActions(this);
+  }
+
+  syncPlannerViews(now: Date) {
+    return syncPlannerViews(this, now);
   }
 
   listExistingActions(): Effect.Effect<Array<ExistingAction>, unknown> {

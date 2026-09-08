@@ -25,6 +25,7 @@ const PROSE_KINDS = new Set(["assignment", "quiz", "announcement", "module", "pa
 interface NotionSyncClient {
   listExistingActions(): Effect.Effect<ReadonlyArray<ExistingAction>, unknown>;
   applyAndVerify(operation: ReconcileOperation): Effect.Effect<unknown, unknown>;
+  syncPlannerViews(now: Date): Effect.Effect<void, unknown>;
   updateHealthBlock(blockId: string, message: string): Effect.Effect<void, unknown>;
 }
 
@@ -234,6 +235,13 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
         detail,
       });
     }
+  }
+
+  const views = yield* deps.notion.syncPlannerViews(nowDate).pipe(Effect.result);
+  if (Result.isFailure(views)) {
+    const detail = safeError(views.failure);
+    failures.push({ course: "SYSTEM", stage: "views", detail });
+    yield* logEvent("views_update_failed", { runId: collection.runId, detail });
   }
 
   const finishedAt = DateTime.formatIso(yield* DateTime.now);
