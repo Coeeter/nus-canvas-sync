@@ -226,6 +226,15 @@ test("known GESS1001 sources become tutorial preparation and distinct real assig
       fields: { title: "Assignment instructions now available", postedAt: "2026-08-25T03:35:12Z" },
     }),
     base({
+      id: "course:94548:announcement:488871",
+      courseCode: "GESS1001",
+      kind: "announcement",
+      fields: {
+        title: "Clarification on Individual Assignment Deadline",
+        postedAt: "2026-09-07T09:25:35Z",
+      },
+    }),
+    base({
       id: "course:94548:module:157035",
       courseCode: "GESS1001",
       kind: "module",
@@ -270,7 +279,8 @@ test("known GESS1001 sources become tutorial preparation and distinct real assig
       expect.objectContaining({
         id: "course:94548:announcement:482225:individual-assignment",
         title: "Write GESS1001 individual migrant landscapes article",
-        conflict: expect.objectContaining({ reason: expect.stringContaining("2026-09-18") }),
+        dueAt: "2026-10-23T04:00:00.000Z",
+        sourceIds: expect.arrayContaining(["course:94548:announcement:488871"]),
       }),
     ]),
   );

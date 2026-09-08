@@ -186,6 +186,11 @@ function gess1001KnownFacts(records: ReadonlyArray<NormalizedRecord>): Array<Tas
 
   const announcement = findAnnouncement(records, "GESS1001", /^Assignment instructions/i);
   if (!announcement) return facts;
+  const deadlineClarification = findAnnouncement(
+    records,
+    "GESS1001",
+    /^Clarification on Individual Assignment Deadline/i,
+  );
   const group = findModuleItem(records, "GESS1001", /Group Assignment.*Heritage and Tourism/i);
   const individual = findModuleItem(records, "GESS1001", /Individual Assignment.*Migration/i);
   facts.push({
@@ -206,17 +211,26 @@ function gess1001KnownFacts(records: ReadonlyArray<NormalizedRecord>): Array<Tas
     courseCode: announcement.courseCode,
     kind: "assessment",
     title: "Write GESS1001 individual migrant landscapes article",
-    sourceIds: [announcement.id, ...(individual ? [individual.sourceId] : [])],
+    sourceIds: [
+      announcement.id,
+      ...(deadlineClarification ? [deadlineClarification.id] : []),
+      ...(individual ? [individual.sourceId] : []),
+    ],
     sourceUrl: individual?.sourceUrl ?? announcement.sourceUrl,
     observed: true,
     authoritativeAction: true,
     availableFrom: stringOrNull(announcement.fields.postedAt),
+    ...(deadlineClarification ? { dueAt: "2026-10-23T04:00:00.000Z" } : {}),
     workMode: "Flexible",
-    conflict: {
-      reason:
-        "Assignment brief says 2026-09-18 12:00 SGT, while the live syllabus says 2026-10-23 12:00 SGT",
-      sources: [announcement.id, ...(individual ? [individual.sourceId] : [])],
-    },
+    ...(!deadlineClarification
+      ? {
+          conflict: {
+            reason:
+              "Assignment brief says 2026-09-18 12:00 SGT, while the live syllabus says 2026-10-23 12:00 SGT",
+            sources: [announcement.id, ...(individual ? [individual.sourceId] : [])],
+          },
+        }
+      : {}),
   });
   return facts;
 }
