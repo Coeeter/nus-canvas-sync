@@ -1,0 +1,283 @@
+{
+  "existing": [
+    {
+      "id": "proposal-canonical",
+      "automatedIdentity": "course:97325:assignment:274462",
+      "properties": {
+        "Action": "IS1128 Project Proposal",
+        "Course": "IS1128",
+        "Status": "Done",
+        "Readiness": "Completed",
+        "Needs Review": false,
+        "Canvas Course ID": "97325",
+        "Canvas Item Type": "assessment",
+        "Canvas Item ID": "course:97325:assignment:274462",
+        "Parent Canvas ID": "course:97325:assignment:274462",
+        "Official Due": "2026-09-20T15:59:59Z",
+        "Planned": "2026-09-09",
+        "Pinned": false
+      }
+    },
+    {
+      "id": "proposal-page-duplicate",
+      "automatedIdentity": "candidate:IS1128:409557916bab68c82958",
+      "properties": {
+        "Action": "Group Project Proposal",
+        "Course": "IS1128",
+        "Status": "Not started",
+        "Readiness": "Review",
+        "Needs Review": true,
+        "Canvas Course ID": "97325",
+        "Canvas Item Type": "assessment",
+        "Canvas Item ID": "candidate:IS1128:409557916bab68c82958",
+        "Parent Canvas ID": "course:97325:page:course-design"
+      }
+    },
+    {
+      "id": "quiz-canonical",
+      "automatedIdentity": "course:94257:assignment:262075",
+      "properties": {
+        "Action": "Quiz 3 (Chapter 3)",
+        "Course": "GEA1000",
+        "Status": "Not started",
+        "Readiness": "Ready",
+        "Needs Review": false,
+        "Canvas Course ID": "94257",
+        "Canvas Item Type": "assessment",
+        "Canvas Item ID": "course:94257:assignment:262075",
+        "Parent Canvas ID": "course:94257:assignment:262075\ncourse:94257:quiz:86811",
+        "Official Due": "2026-09-20T15:59:59Z"
+      }
+    },
+    {
+      "id": "quiz-reminder-duplicate",
+      "automatedIdentity": "candidate:GEA1000:a0d40c1e414b182d3010",
+      "properties": {
+        "Action": "Quiz 3",
+        "Course": "GEA1000",
+        "Status": "Not started",
+        "Readiness": "Ready",
+        "Needs Review": false,
+        "Canvas Course ID": "94257",
+        "Canvas Item Type": "assessment",
+        "Canvas Item ID": "candidate:GEA1000:a0d40c1e414b182d3010",
+        "Parent Canvas ID": "course:94257:announcement:493901"
+      }
+    },
+    {
+      "id": "tutorial-3",
+      "automatedIdentity": "candidate:GEA1000:7fa6581a3316a177bf24",
+      "properties": {
+        "Action": "Prepare Tutorial 3 questions",
+        "Course": "GEA1000",
+        "Status": "Not started",
+        "Readiness": "Review",
+        "Needs Review": true,
+        "Available From": "2026-09-14T09:33:46Z",
+        "Official Due": null,
+        "Planned": "2026-09-30",
+        "Notes": "Nas confirmed the timing",
+        "Canvas Course ID": "94257",
+        "Canvas Item Type": "preparation",
+        "Canvas Item ID": "candidate:GEA1000:7fa6581a3316a177bf24",
+        "Parent Canvas ID": "course:94257:announcement:492023\ncourse:94257:document:10030206"
+      }
+    }
+  ],
+  "courses": {
+    "IS1128": {
+      "records": [
+        {
+          "id": "course:97325:assignment:274462",
+          "courseCode": "IS1128",
+          "kind": "assignment",
+          "sourceUrl": "https://canvas.example/assignments/274462",
+          "contentHash": "assignment-hash",
+          "fields": {
+            "name": "Project proposal submission",
+            "dueAt": "2026-09-20T15:59:59Z",
+            "unlockAt": "2026-08-31T16:00:00Z",
+            "published": true,
+            "lockedForUser": false,
+            "submissionTypes": ["online_upload"],
+            "submission": { "workflowState": "submitted", "submittedAt": "2026-09-18T13:02:25Z" }
+          }
+        },
+        {
+          "id": "course:97325:page:course-design",
+          "courseCode": "IS1128",
+          "kind": "page",
+          "sourceUrl": null,
+          "contentHash": "page-hash",
+          "fields": { "title": "Course Design", "body": "Proposal due Sunday." }
+        },
+        {
+          "id": "course:97325:announcement:493987",
+          "courseCode": "IS1128",
+          "kind": "announcement",
+          "sourceUrl": null,
+          "contentHash": "announcement-hash",
+          "fields": {
+            "title": "Project proposal reminder",
+            "message": "One group, one submission."
+          }
+        }
+      ],
+      "candidates": [
+        {
+          "courseCode": "IS1128",
+          "sourceIds": ["course:97325:page:course-design"],
+          "evidence": "Proposal due Sunday",
+          "kind": "assessment",
+          "title": "Group Project Proposal",
+          "requiredAction": "Submit",
+          "availableFrom": null,
+          "dueAt": "2026-09-20T15:59:00Z",
+          "eventEndsAt": null,
+          "confidence": 0.78,
+          "ambiguity": "Tentative page",
+          "matchTaskId": null,
+          "logicalKey": null
+        },
+        {
+          "courseCode": "IS1128",
+          "sourceIds": ["course:97325:announcement:493987"],
+          "evidence": "One group, one submission",
+          "kind": "assessment",
+          "title": "Project proposal",
+          "requiredAction": "Submit",
+          "availableFrom": null,
+          "dueAt": null,
+          "eventEndsAt": null,
+          "confidence": 0.86,
+          "ambiguity": "Date is incomplete",
+          "matchTaskId": null,
+          "logicalKey": null
+        },
+        {
+          "courseCode": "IS1128",
+          "sourceIds": ["course:97325:assignment:274462"],
+          "evidence": "Submitted assignment",
+          "kind": "assessment",
+          "title": "Project proposal submission",
+          "requiredAction": "Submit",
+          "availableFrom": "2026-08-31T16:00:00Z",
+          "dueAt": "2026-09-20T15:59:59Z",
+          "eventEndsAt": null,
+          "confidence": 0.99,
+          "ambiguity": null,
+          "matchTaskId": null,
+          "logicalKey": null
+        }
+      ]
+    },
+    "GEA1000": {
+      "records": [
+        {
+          "id": "course:94257:assignment:262075",
+          "courseCode": "GEA1000",
+          "kind": "assignment",
+          "sourceUrl": "https://canvas.example/assignments/262075",
+          "contentHash": "assignment-hash",
+          "fields": {
+            "name": "Quiz 3 (Chapter 3)",
+            "dueAt": "2026-09-20T15:59:59Z",
+            "unlockAt": "2026-09-06T16:00:00Z",
+            "published": true,
+            "lockedForUser": false,
+            "quizId": 86811,
+            "submission": { "workflowState": "unsubmitted", "submittedAt": null }
+          }
+        },
+        {
+          "id": "course:94257:quiz:86811",
+          "courseCode": "GEA1000",
+          "kind": "quiz",
+          "sourceUrl": "https://canvas.example/quizzes/86811",
+          "contentHash": "quiz-hash",
+          "fields": {
+            "title": "Quiz 3 (Chapter 3)",
+            "dueAt": "2026-09-20T15:59:59Z",
+            "unlockAt": "2026-09-06T16:00:00Z",
+            "published": true,
+            "lockedForUser": false
+          }
+        },
+        {
+          "id": "course:94257:announcement:493901",
+          "courseCode": "GEA1000",
+          "kind": "announcement",
+          "sourceUrl": null,
+          "contentHash": "reminder-hash",
+          "fields": { "title": "Quiz 3 reminder", "message": "Quiz 3 is due this Sunday." }
+        },
+        {
+          "id": "course:94257:announcement:492023",
+          "courseCode": "GEA1000",
+          "kind": "announcement",
+          "sourceUrl": null,
+          "contentHash": "tutorial-hash",
+          "fields": { "title": "Tutorial 3", "message": "Work through the questions before class." }
+        },
+        {
+          "id": "course:94257:document:10030206",
+          "courseCode": "GEA1000",
+          "kind": "document",
+          "sourceUrl": null,
+          "contentHash": "document-hash",
+          "fields": {
+            "displayName": "Tutorial 3.pdf",
+            "text": "Please work on the problems before coming to class."
+          }
+        }
+      ],
+      "candidates": [
+        {
+          "courseCode": "GEA1000",
+          "sourceIds": ["course:94257:assignment:262075", "course:94257:quiz:86811"],
+          "evidence": "Quiz 3 is open",
+          "kind": "assessment",
+          "title": "Quiz 3 (Chapter 3)",
+          "requiredAction": "Attempt",
+          "availableFrom": "2026-09-06T16:00:00Z",
+          "dueAt": "2026-09-20T15:59:59Z",
+          "eventEndsAt": null,
+          "confidence": 0.99,
+          "ambiguity": null,
+          "matchTaskId": null,
+          "logicalKey": null
+        },
+        {
+          "courseCode": "GEA1000",
+          "sourceIds": ["course:94257:announcement:493901"],
+          "evidence": "Quiz 3 is due this Sunday",
+          "kind": "assessment",
+          "title": "Quiz 3",
+          "requiredAction": "Attempt",
+          "availableFrom": null,
+          "dueAt": "2026-09-20T15:59:00Z",
+          "eventEndsAt": null,
+          "confidence": 0.95,
+          "ambiguity": null,
+          "matchTaskId": null,
+          "logicalKey": null
+        },
+        {
+          "courseCode": "GEA1000",
+          "sourceIds": ["course:94257:announcement:492023", "course:94257:document:10030206"],
+          "evidence": "Work through Tutorial 3 questions before class",
+          "kind": "preparation",
+          "title": "Prepare Tutorial 3 questions",
+          "requiredAction": "Prepare",
+          "availableFrom": "2026-09-14T09:33:46Z",
+          "dueAt": null,
+          "eventEndsAt": null,
+          "confidence": 0.98,
+          "ambiguity": "Class time is not in supplied evidence",
+          "matchTaskId": null,
+          "logicalKey": null
+        }
+      ]
+    }
+  }
+}

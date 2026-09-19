@@ -1,3 +1,5 @@
+import { isMachineDateValue } from "../reconcile/values";
+
 const TEXT = new Set([
   "Canvas Course ID",
   "Canvas Item ID",
@@ -16,7 +18,12 @@ export function encodeNotionProperties(properties: Record<string, unknown>) {
       if (TEXT.has(name)) return [name, { rich_text: richText(value) }];
       if (SELECT.has(name))
         return [name, { select: value == null ? null : { name: String(value) } }];
-      if (DATE.has(name)) return [name, { date: value == null ? null : { start: String(value) } }];
+      if (DATE.has(name)) {
+        if (value != null && !isMachineDateValue(value)) {
+          throw new Error(`Invalid machine date for Notion property: ${name}`);
+        }
+        return [name, { date: value == null ? null : { start: value } }];
+      }
       if (name === "Needs Review" || name === "Grade Affecting" || name === "Pinned") {
         return [name, { checkbox: Boolean(value) }];
       }

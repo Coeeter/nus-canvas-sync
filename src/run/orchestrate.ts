@@ -1,30 +1,28 @@
 import { DateTime, Effect, FileSystem, Option, Path, Result } from "effect";
 import type { ChildProcessSpawner } from "effect/unstable/process";
 import type { CourseInterpretationInput } from "../ai/input";
-import { mergeCandidateFacts } from "../ai/reduce";
 import { mergeCandidateEnvelopes } from "../ai/state";
 import type { CandidateEnvelope } from "../ai/types";
 import type { FailureAlert } from "../alerts/resend";
 import type { CollectionResult } from "../collector/run";
 import type { CourseCode } from "../config/courses";
+import { TaskAffectingFailureError } from "../errors";
 import { healthSummary } from "../health/summary";
 import type { NormalizedRecord } from "../normalize/types";
-import { bundleContiguousLectures } from "../projector/bundle";
-import { applyTaskDependencies } from "../projector/dependencies";
 import { factsFromRecords } from "../projector/from-records";
-import { applyCourseSchedule } from "../projector/schedule";
 import type { ExistingAction, ReconcileOperation } from "../reconcile/plan";
-import { findExistingAction, planReconciliation, selectTrackedTasks } from "../reconcile/plan";
-import { projectTask } from "../rules/lifecycle";
+import { stateAfterVerifiedWrites } from "../reconcile/state";
 import { writeJsonAtomic } from "../state/atomic";
 import { writeBaseline } from "../state/baseline-store";
 import { readInterpretation, writeInterpretation } from "../state/interpretation-store";
+import { readReconciliationState, writeReconciliationState } from "../state/reconcile-store";
+import { planCourse } from "./course-plan";
 
 const PROSE_KINDS = new Set(["assignment", "quiz", "announcement", "module", "page"]);
 
 interface NotionSyncClient {
   listExistingActions(): Effect.Effect<ReadonlyArray<ExistingAction>, unknown>;
-  applyAndVerify(operation: ReconcileOperation): Effect.Effect<unknown, unknown>;
+  applyAndVerify(operation: ReconcileOperation): Effect.Effect<ExistingAction, unknown>;
   syncPlannerViews(now: Date): Effect.Effect<void, unknown>;
   updateHealthBlock(blockId: string, message: string): Effect.Effect<void, unknown>;
 }
@@ -133,13 +131,22 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
 
       const diff = collection.diffs[entry.courseCode];
       const previousCandidates = yield* readInterpretation(deps.dataDir, entry.courseCode);
+      const reconciliationState = yield* readReconciliationState(deps.dataDir, entry.courseCode);
       const changed =
         previousCandidates === null
           ? records
           : diff
             ? [...diff.added, ...diff.changed.map((change) => change.after)]
             : [];
-      const input = interpretationInput(entry.courseCode, changed, contextDocument);
+      const deterministicFacts = factsFromRecords(records);
+      const input = interpretationInput(
+        entry.courseCode,
+        changed,
+        contextDocument,
+        records,
+        deterministicFacts,
+        reconciliationState,
+      );
 
       yield* logEvent("course_ai_started", {
         runId: collection.runId,
@@ -165,37 +172,50 @@ export const runSync = Effect.fn("runSync")(function* (deps: SyncDependencies) {
         previousCandidates === null
           ? freshCandidates
           : mergeCandidateEnvelopes(previousCandidates, freshCandidates, affectedSourceIds);
-      const facts = applyCourseSchedule(
-        applyTaskDependencies(
-          mergeCandidateFacts(factsFromRecords(records), candidates.candidates).map((fact) => {
-            if (fact.kind === "e-lecture") return fact;
-            const row = findExistingAction(existing, fact.id, fact.sourceIds, fact.title);
-            const status = row?.properties.Status;
-            return isTerminalStatus(status) ? { ...fact, userStatus: status } : fact;
-          }),
-        ),
-      );
-
-      const projected = selectTrackedTasks(
-        bundleContiguousLectures(facts.map((fact) => projectTask(fact, nowDate))).map((task) => {
-          if (task.kind !== "e-lecture") return task;
-          const row = findExistingAction(existing, task.id, task.sourceIds, task.title);
-          const status = row?.properties.Status;
-          return isTerminalStatus(status)
-            ? projectTask({ ...task, userStatus: status }, nowDate)
-            : task;
-        }),
+      const plan = planCourse({
+        records,
+        candidates,
         existing,
-      );
-      const operations = planReconciliation(existing, projected, nowIso);
+        reconciliationState,
+        now: nowDate,
+        syncedAt: nowIso,
+      });
+      if (plan.conflicts.length > 0) {
+        return yield* new TaskAffectingFailureError({
+          command: "plan reconciliation",
+          message: plan.conflicts
+            .map(
+              (conflict) =>
+                `${conflict.title} (${conflict.identity}): ${conflict.reason}; sources=${conflict.sourceIds.join(",")}`,
+            )
+            .join(" | "),
+        });
+      }
+      const operations = plan.operations;
       yield* logEvent("course_notion_started", {
         runId: collection.runId,
         course: entry.courseCode,
         operations: operations.length,
       });
-      yield* Effect.forEach(operations, (operation) => deps.notion.applyAndVerify(operation), {
-        discard: true,
-      }).pipe(Effect.withSpan("nus-sync.course.notion"));
+      const verified = yield* Effect.forEach(operations, (operation) =>
+        deps.notion.applyAndVerify(operation),
+      ).pipe(Effect.withSpan("nus-sync.course.notion"));
+      const verifiedExisting = [...existing];
+      for (const row of verified) {
+        const index = verifiedExisting.findIndex((candidate) => candidate.id === row.id);
+        if (index >= 0) verifiedExisting[index] = row;
+        else verifiedExisting.push(row);
+      }
+      yield* writeReconciliationState(
+        deps.dataDir,
+        entry.courseCode,
+        stateAfterVerifiedWrites(
+          reconciliationState,
+          verifiedExisting,
+          plan.projections,
+          operations,
+        ),
+      );
       yield* writeInterpretation(deps.dataDir, entry.courseCode, candidates);
       yield* writeBaseline(deps.dataDir, entry.courseCode, records).pipe(
         Effect.withSpan("nus-sync.course.baseline"),
@@ -342,14 +362,61 @@ function interpretationInput(
   courseCode: CourseCode,
   records: ReadonlyArray<NormalizedRecord>,
   contextDocument: string,
+  allRecords: ReadonlyArray<NormalizedRecord>,
+  deterministicFacts: ReadonlyArray<import("../domain/task").TaskFact>,
+  reconciliationState: import("../state/reconcile-store").ReconciliationState,
 ) {
   const referencedDocuments = records.filter((record) => record.kind === "document");
+  const changedIds = new Set(records.map((record) => record.id));
+  const canonicalTasks = deterministicFacts.map((fact) => ({
+    id: fact.id,
+    courseCode: fact.courseCode,
+    kind: fact.kind,
+    title: fact.title,
+    sourceIds: fact.sourceIds,
+    ...(fact.logicalKey ? { logicalKey: fact.logicalKey } : {}),
+  }));
+  const knownIds = new Set(canonicalTasks.map((task) => task.id));
+  for (const task of Object.values(reconciliationState.tasks)) {
+    if (!task.kind || !task.title || knownIds.has(task.logicalId)) continue;
+    canonicalTasks.push({
+      id: task.logicalId,
+      courseCode,
+      kind: task.kind,
+      title: task.title,
+      sourceIds: task.sourceIds,
+      ...(task.logicalKey ? { logicalKey: task.logicalKey } : {}),
+    });
+  }
   return {
     courseCode,
     courseContext: courseContext(contextDocument, courseCode),
     changedRecords: records.filter((record) => PROSE_KINDS.has(record.kind)),
     referencedDocuments,
+    canonicalTasks,
+    unchangedRecords: allRecords
+      .filter(
+        (record) =>
+          !changedIds.has(record.id) && (record.kind === "assignment" || record.kind === "quiz"),
+      )
+      .map(compactCanonicalRecord),
   } satisfies CourseInterpretationInput;
+}
+
+function compactCanonicalRecord(record: NormalizedRecord): NormalizedRecord {
+  const fields: Record<string, unknown> = {};
+  for (const key of [
+    "name",
+    "title",
+    "dueAt",
+    "unlockAt",
+    "quizId",
+    "published",
+    "lockedForUser",
+  ]) {
+    if (Object.hasOwn(record.fields, key)) fields[key] = record.fields[key];
+  }
+  return { ...record, fields };
 }
 
 function courseContext(document: string, courseCode: CourseCode) {
@@ -358,10 +425,6 @@ function courseContext(document: string, courseCode: CourseCode) {
   if (start < 0) return courseCode;
   const end = document.indexOf("\n#### ", start + marker.length);
   return document.slice(start, end < 0 ? undefined : end);
-}
-
-function isTerminalStatus(status: unknown): status is "Done" | "Dropped" {
-  return status === "Done" || status === "Dropped";
 }
 
 function safeError(error: unknown) {

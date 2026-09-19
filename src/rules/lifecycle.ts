@@ -1,5 +1,6 @@
 import { COURSE_RULES } from "../../config/course-rules";
 import type { TaskFact, TaskProjection } from "../domain/task";
+import { parseReconciliationDate } from "../reconcile/values";
 
 const TERMINAL = new Set(["Done", "Dropped"]);
 
@@ -26,12 +27,14 @@ export function projectTask(fact: TaskFact, now: Date): TaskProjection {
   if (!fact.observed || (fact.kind === "assessment" && !fact.authoritativeAction)) {
     return base("expected", "Cadence or schedule is not release evidence");
   }
-  if (fact.kind === "preparation" && fact.eventEndsAt && now >= new Date(fact.eventEndsAt)) {
+  const eventEndsAt = parseReconciliationDate(fact.eventEndsAt);
+  if (fact.kind === "preparation" && eventEndsAt !== null && now.getTime() >= eventEndsAt) {
     return base("expired", "Preparation event has ended");
   }
   if (fact.blockedBy) return base("waiting", `Waiting on ${fact.blockedBy}`);
   if (fact.scheduled) return base("scheduled", "Assessed work takes place during class");
-  if (fact.availableFrom && now < new Date(fact.availableFrom)) {
+  const availableFrom = parseReconciliationDate(fact.availableFrom);
+  if (availableFrom !== null && now.getTime() < availableFrom) {
     return base("locked", "Authoritative release time is in the future");
   }
   return base("ready", null);

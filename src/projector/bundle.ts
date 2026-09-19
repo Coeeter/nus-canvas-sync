@@ -1,15 +1,20 @@
 import { createHash } from "node:crypto";
 import type { TaskProjection } from "../domain/task";
+import type { ExistingAction } from "../reconcile/plan";
 
 export function bundleContiguousLectures(
   tasks: ReadonlyArray<TaskProjection>,
+  terminalMemberSourceIds: ReadonlySet<string> = new Set(),
 ): Array<TaskProjection> {
   const passthrough = tasks.filter(
     (task) => task.kind !== "e-lecture" || task.week === undefined || task.state !== "ready",
   );
   const lectures = tasks.filter(
     (task): task is TaskProjection & { week: number } =>
-      task.kind === "e-lecture" && task.week !== undefined && task.state === "ready",
+      task.kind === "e-lecture" &&
+      task.week !== undefined &&
+      task.state === "ready" &&
+      task.memberSourceIds.every((sourceId) => !terminalMemberSourceIds.has(sourceId)),
   );
 
   for (const courseCode of new Set(lectures.map((task) => task.courseCode))) {
@@ -45,4 +50,17 @@ export function bundleContiguousLectures(
     flush();
   }
   return passthrough;
+}
+
+/** Terminal bundle membership is carried forward when a new week changes the bundle id. */
+export function terminalLectureMembers(existing: ReadonlyArray<ExistingAction>) {
+  const members = new Set<string>();
+  for (const row of existing) {
+    if (row.properties["Canvas Item Type"] !== "e-lecture") continue;
+    if (row.properties.Status !== "Done" && row.properties.Status !== "Dropped") continue;
+    const parent = row.properties["Parent Canvas ID"];
+    if (typeof parent !== "string") continue;
+    for (const sourceId of parent.split("\n").filter(Boolean)) members.add(sourceId);
+  }
+  return members;
 }

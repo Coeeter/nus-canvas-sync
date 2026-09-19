@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mergeCandidateEnvelopes } from "../../src/ai/state";
+import { mergeCandidateEnvelopes, migrateCandidateEnvelope } from "../../src/ai/state";
 import type { CourseCandidate } from "../../src/ai/types";
 
 const candidate = (title: string, sourceIds: Array<string>): CourseCandidate => ({
@@ -25,4 +25,31 @@ test("unchanged candidates persist while affected candidates are replaced", () =
       new Set(["source:2"]),
     ),
   ).toEqual({ candidates: [retained, fresh] });
+});
+
+test("legacy nullable dates migrate to unknown, never explicit removal", () => {
+  const legacy = candidate("Legacy", ["source:1"]);
+  const migrated = migrateCandidateEnvelope({ candidates: [legacy] }).candidates[0]!;
+  expect(migrated.dateEvidence?.dueAt).toEqual({
+    state: "unknown",
+    value: null,
+    sourceIds: ["source:1"],
+  });
+});
+
+test("legacy malformed dates become unknown review evidence without reaching planning", () => {
+  const legacy = {
+    ...candidate("Legacy", ["source:1"]),
+    dueAt: "September 30",
+  };
+  const migrated = migrateCandidateEnvelope({ candidates: [legacy] }).candidates[0]!;
+  expect(migrated.dueAt).toBe(null);
+  expect(migrated.dateEvidence?.dueAt).toEqual({
+    state: "unknown",
+    value: null,
+    sourceIds: ["source:1"],
+  });
+  expect(migrated.reviewIssue?.values).toContainEqual(
+    expect.objectContaining({ field: "dueAt", value: "September 30" }),
+  );
 });

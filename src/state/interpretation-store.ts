@@ -1,4 +1,5 @@
 import { Effect, FileSystem, Schema } from "effect";
+import { migrateCandidateEnvelope } from "../ai/state";
 import type { CandidateEnvelope } from "../ai/types";
 import { CandidateEnvelopeSchema } from "../ai/validate";
 import type { CourseCode } from "../config/courses";
@@ -13,7 +14,10 @@ export const readInterpretation = Effect.fn("readInterpretation")(function* (
   const path = interpretationPath(dataDir, courseCode);
   if (!(yield* fs.exists(path))) return null;
   const raw = yield* fs.readFileString(path);
-  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CandidateEnvelopeSchema))(raw);
+  const decoded = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CandidateEnvelopeSchema))(
+    raw,
+  );
+  return migrateCandidateEnvelope(decoded);
 });
 
 export const writeInterpretation = Effect.fn("writeInterpretation")(function* (
@@ -21,5 +25,8 @@ export const writeInterpretation = Effect.fn("writeInterpretation")(function* (
   courseCode: CourseCode,
   candidates: CandidateEnvelope,
 ) {
-  yield* writeJsonAtomic(interpretationPath(dataDir, courseCode), candidates);
+  yield* writeJsonAtomic(
+    interpretationPath(dataDir, courseCode),
+    migrateCandidateEnvelope(candidates),
+  );
 });

@@ -1,6 +1,7 @@
 import { Effect, Redacted, Schedule, Schema } from "effect";
 import { type HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 import type { ExistingAction, ReconcileOperation } from "../reconcile/plan";
+import { sameReconciliationValue } from "../reconcile/values";
 import { decodeNotionProperties, encodeNotionProperties, readNotionText } from "./properties";
 import { syncPlannerViews } from "./views";
 
@@ -72,8 +73,14 @@ export class NotionClient {
     );
   }
 
-  applyAndVerify(operation: ReconcileOperation) {
-    return applyAndVerify(this, operation);
+  applyAndVerify(operation: ReconcileOperation): Effect.Effect<ExistingAction, unknown> {
+    return applyAndVerify(this, operation).pipe(
+      Effect.map((page) => ({
+        id: page.id,
+        automatedIdentity: readNotionText(page.properties["Canvas Item ID"]),
+        properties: decodeNotionProperties(page.properties),
+      })),
+    );
   }
 
   updateHealthBlock(blockId: string, message: string) {
@@ -159,13 +166,20 @@ const applyAndVerify = Effect.fn("NotionClient.applyAndVerify")(function* (
         cause,
       }),
   });
-  if (operation.type === "update") yield* client.getPage(operation.pageId);
+  const fresh = operation.type === "update" ? yield* client.getPage(operation.pageId) : undefined;
+  const rebasedValues =
+    operation.type === "update" ? yield* rebaseUpdate(operation, fresh!) : operation.properties;
+  const rebasedProperties =
+    operation.type === "update" ? encodeNotionProperties(rebasedValues) : encodedProperties;
   const pageId =
     operation.type === "create"
       ? yield* client.createPage(encodedProperties)
-      : yield* client.updatePage(operation.pageId, encodedProperties);
+      : Object.keys(rebasedProperties).length === 0
+        ? operation.pageId
+        : yield* client.updatePage(operation.pageId, rebasedProperties);
   const verified = yield* client.getPage(pageId);
-  const identity = readNotionText(verified.properties["Canvas Item ID"]);
+  const decoded = decodeNotionProperties(verified.properties);
+  const identity = decoded["Canvas Item ID"];
   if (!verified.id || identity !== operation.identity) {
     return yield* new NotionRequestError({
       message: `Notion verification failed for ${operation.identity}`,
@@ -173,7 +187,63 @@ const applyAndVerify = Effect.fn("NotionClient.applyAndVerify")(function* (
       cause: operation.identity,
     });
   }
+  for (const [name, value] of Object.entries(rebasedValues)) {
+    if (name === "Last Synced") continue;
+    if (!sameReconciliationValue(name, decoded[name], value)) {
+      return yield* new NotionRequestError({
+        message: `Notion verification failed for ${operation.identity}: ${name}`,
+        retryable: false,
+        cause: value,
+      });
+    }
+  }
   return verified;
+});
+
+const rebaseUpdate = Effect.fn("NotionClient.rebaseUpdate")(function* (
+  operation: Extract<ReconcileOperation, { type: "update" }>,
+  fresh: NotionActionPage,
+) {
+  const current = decodeNotionProperties(fresh.properties);
+  const currentIdentity = current["Canvas Item ID"];
+  const expectedIdentity = Object.hasOwn(operation.expectedProperties, "Canvas Item ID")
+    ? operation.expectedProperties["Canvas Item ID"]
+    : operation.identity;
+  if (
+    typeof expectedIdentity !== "string" ||
+    (currentIdentity !== expectedIdentity && currentIdentity !== operation.identity)
+  ) {
+    return yield* new NotionRequestError({
+      message: `Notion page changed identity before ${operation.identity}`,
+      retryable: false,
+      cause: currentIdentity,
+    });
+  }
+  if (
+    (current.Status === "Done" || current.Status === "Dropped") &&
+    !sameReconciliationValue("Status", current.Status, operation.expectedProperties.Status)
+  ) {
+    return yield* new NotionRequestError({
+      message: `Notion page became terminal before ${operation.identity}`,
+      retryable: false,
+      cause: current.Status,
+    });
+  }
+  const rebased: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(operation.properties)) {
+    if (name === "Canvas Item ID" && currentIdentity === operation.identity) continue;
+    const expected = operation.expectedProperties[name];
+    if (
+      Object.hasOwn(operation.expectedProperties, name) &&
+      !sameReconciliationValue(name, current[name], expected)
+    ) {
+      // A user or another run changed this field after planning. Leave it
+      // intact; the next reconciliation will decide from its persisted state.
+      continue;
+    }
+    rebased[name] = value;
+  }
+  return rebased;
 });
 
 const findHealthBlock = Effect.fn("NotionClient.findHealthBlock")(function* (

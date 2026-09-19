@@ -13,8 +13,20 @@ export type TaskState =
   | "inactive";
 export type UserStatus = "Not started" | "In progress" | "Done" | "Dropped";
 
+export interface TaskConflictIssue {
+  kind: string;
+  field?: string;
+  /** Canonical affected-field set; `field` is retained for legacy consumers. */
+  fields?: ReadonlyArray<string>;
+  values?: ReadonlyArray<unknown>;
+}
+
 export interface TaskFact {
   id: string;
+  /** Stable logical identity. It is independent of mutable title/evidence wording. */
+  logicalKey?: string;
+  /** Old candidate ids and source identities retained for migration/reconciliation. */
+  aliases?: ReadonlyArray<string>;
   courseCode: CourseCode;
   kind: TaskKind;
   title: string;
@@ -30,7 +42,14 @@ export interface TaskFact {
   workMode?: "Flexible" | "Before class" | "During class" | "Online";
   blockedBy?: string | null;
   userStatus?: UserStatus;
-  conflict?: { reason: string; sources: ReadonlyArray<string> };
+  /** Raw source-backed Notion proposal carried through planning, not user state. */
+  sourceProposal?: Readonly<Record<string, unknown>>;
+  conflict?: {
+    reason: string;
+    sources: ReadonlyArray<string>;
+    issue?: TaskConflictIssue;
+  };
+  reviewResolution?: { revision: string; overrides: Record<string, unknown> };
   week?: number;
 }
 

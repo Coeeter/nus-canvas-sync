@@ -42,3 +42,38 @@ changed prose, validates candidate provenance, and keeps lifecycle decisions in
 code. ChatGPT and Claude remain useful for manual todos and human Review but do
 not run broad automated interpretation. Real failures retain the affected
 baseline, update sync health, and send an idempotent Resend alert.
+
+## 2026-09-19 — Durable reconciliation state and review acceptance
+
+Canonical assignment/quiz identities and source-anchored derived stage keys are
+persisted with evidence aliases. Review acceptance is stored against a stable
+evidence revision of durable facts/issues and corrected fields are applied
+before lifecycle projection; added evidence aliases do not reopen an accepted
+review, while changed disputed facts do. The existing data volume also stores
+source proposals and last verified writes so reconciliation uses three-way
+ownership, distinguishes unknown from explicit removal, preserves and reviews
+preexisting correction dates during bootstrap, and rebases immediately before
+Notion patches. Terminal races fail closed while already-terminal rows may
+migrate safe metadata. Bundle terminal membership is carried into later
+membership changes. The migration command is dry-run only until the repaired
+planner has been independently reviewed.
+
+The follow-up review also requires terminal lifecycle precedence over new date
+conflicts, structured AI issue/date evidence with an explicit unknown versus
+authoritative-null distinction, and a raw source-proposal field separate from
+user corrections and machine-write receipts. Accepted corrections therefore
+remain stable through repeated unchanged runs without rewriting source
+provenance.
+
+Review issue fingerprints treat affected fields and disputed values as semantic
+sets without source provenance. Corroborating evidence and source ordering do
+not reopen an unchanged issue; a genuinely different field or value does.
+Ambiguous active lecture bundle overlaps remain untouched but fail the affected
+course before writes or baseline advancement so newly uncovered work is
+explicit.
+
+Machine-owned date fields accept only calendar-valid ISO date-only values or
+timestamps with an explicit timezone. Incomplete source phrases remain null /
+unknown with raw structured review evidence; they are never coerced into a
+year, time, or Notion date. Malformed legacy cached dates migrate
+conservatively without resetting reconciliation state or history.

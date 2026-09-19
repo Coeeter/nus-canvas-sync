@@ -14,13 +14,45 @@ This file defines durable planner behavior. Current Canvas, official course site
 - The deterministic `nus-canvas-sync` service is the only automated source
   reconciler. Codex extraction supplies source-backed candidates only; code owns
   identity, release gates, completion, expiry, bundling, and review routing.
+- Automated work has a durable logical identity. A current assignment/quiz ID is
+  canonical; a derived task uses a source-anchored stage key persisted in the
+  service state. Announcement/page/document IDs are evidence aliases, never a
+  task identity by themselves, because one source may describe several stages.
+  Ambiguous links remain in Review.
 - `Status` is the only user-facing workflow control. Preserve user choices unless an explicit rule below authorizes automation.
 - Preserve user-authored notes, priority, effort, and planning choices. Replan `Planned` only when `Pinned` is false. Merge source evidence into notes without erasing user text.
 - `Readiness`, `Start By`, source identity, source state, missing-sync counters, and sync timestamps are agent-maintained metadata and stay hidden from routine views.
 - `Done` and `Dropped` leave active views immediately. `Readiness` mirrors terminal `Done` as `Completed`.
+- Review acceptance is tied to the relevant evidence revision. A corrected
+  field and cleared `Needs Review` are applied before lifecycle projection and
+  persist across unchanged syncs and restarts. New conflicting evidence may
+  reopen Review without erasing the accepted correction; added source aliases,
+  title wording, and equivalent ISO date spellings do not. Source deadlines
+  and planned dates remain separate. On initial bootstrap, an existing
+  differing correction date is preserved and reviewed until its provenance is
+  established.
 - Authoritative Canvas submission/grade evidence and the verified CS2030S exact
   latest `Submit` signal may set the matching automated action to Done. No
   interpretation may reopen a terminal user choice.
+- Terminal `Done` and `Dropped` status dominates newly discovered conflicts:
+  preserve conflicting source dates/history, but never route terminal work back
+  to `Needs Review` or `Readiness: Review`.
+- AI date fields use structured evidence states: `unknown`, `value`, or
+  `explicit-null`. A legacy nullable `null` is migrated as unknown, never as
+  authoritative removal. Structured review issues carry affected fields and
+  normalized source-backed values; prose remains display/legacy fallback only.
+- Machine-owned candidate dates must be calendar-valid ISO date-only values or
+  ISO timestamps with an explicit timezone. Incomplete phrases remain null /
+  unknown date evidence and raw structured review text; they must not be
+  coerced into a year, time, or Notion date.
+- Persist raw source proposals separately from protected bootstrap corrections,
+  accepted user overrides, and verified machine writes. Never derive source
+  provenance from a corrected Notion projection.
+- Apply user terminal choices before dependency projection. An unambiguous
+  active lecture bundle may grow in place as weeks release; split or ambiguous
+  overlaps stay unchanged for manual review rather than being merged or
+  duplicated automatically, and surface an actionable course conflict before
+  writes or baseline advancement.
 
 ## Readiness
 

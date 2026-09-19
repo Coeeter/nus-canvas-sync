@@ -22,3 +22,12 @@ test("reads the stable identity from a Notion rich-text property", () => {
     "course:1:quiz:2",
   );
 });
+
+test("rejects malformed machine dates before building a Notion payload", () => {
+  expect(() => encodeNotionProperties({ "Official Due": "September 30" })).toThrow(
+    "Invalid machine date",
+  );
+  expect(encodeNotionProperties({ "Official Due": "2026-09-30" })).toEqual({
+    "Official Due": { date: { start: "2026-09-30" } },
+  });
+});

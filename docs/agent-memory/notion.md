@@ -28,13 +28,50 @@ Treat filters, sorts, grouping, and dependency behavior as planner logic. Preser
 Ordinary planner records, course guidance, dashboard callouts, and the maintained Agent Instructions copy may be updated. Canvas and course GitHub sources remain read-only. Ask Nas before changing the Notion database structure or dashboard layout.
 
 The deterministic service matches automated rows through the existing Canvas
-identity fields, refetches before every patch, changes only agent-owned fields
-(plus Status when authoritative completion permits), and verifies the identity
-after writing. It never edits a row whose Canvas Item ID is empty; those rows
+identity fields and persisted aliases, refetches immediately before every
+patch, rebases each field against that fresh response, changes only agent-owned
+fields (plus Status when authoritative completion permits), and verifies
+identity and patched values after writing. A field changed between the initial
+list and the patch is preserved and reconsidered on the next run; the API has
+no atomic compare-and-set, so refetch/rebase is a best-effort race boundary.
+The service records reconciliation state only after all course writes are
+verified. It never edits a row whose Canvas Item ID is empty; those rows
 remain manual ChatGPT/Claude/Nas tasks with all user fields preserved.
+For released lecture bundles, an active superset row is reused when the
+projected membership shrinks; terminal bundle members are not resurrected.
+
+Review revisions fingerprint durable task identity, kind, normalized disputed
+issue, and normalized disputed facts/dates. Affected fields and disputed values
+are semantic sets that exclude source provenance, so corroborating source
+membership and ordering do not reopen an accepted review; changed disputed
+fields or values still do. Added source membership, title wording, and
+equivalent ISO date spellings do not reopen an accepted review. Source overlap
+is migration evidence, not identity, and cannot merge distinct durable stages.
+A terminal row may receive
+completed metadata or identity migration only when it was already terminal at
+planning time; a concurrent terminal transition fails closed. During initial
+bootstrap, differing existing correction dates are preserved and flagged for
+review as protected bootstrap corrections, not machine-written provenance.
+They remain protected across restarts and unchanged syncs; explicit acceptance
+records the correction, while a later source change reopens Review without
+overwriting it. Date-only release values use Asia/Singapore midnight semantics.
+Machine-owned date payloads must be calendar-valid ISO date-only values or
+timezone-bearing ISO timestamps; incomplete raw date phrases remain review
+evidence and are never sent as Notion dates.
+- Terminal `Done`/`Dropped` status dominates newly discovered source conflicts:
+  preserve conflicting dates/history, but never route terminal work back to
+  Review. New AI candidates use structured issue values and explicit date
+  states (`unknown`, `value`, or `explicit-null`); legacy nullable cache nulls
+  migrate to unknown. Raw source proposals, user corrections, and verified
+  machine-write receipts remain separate across restarts.
+- User terminal status is applied before prerequisite projection. Active lecture
+  bundles may expand in place when the overlap is unambiguous; split or
+  multiple-overlap cases remain unchanged for explicit human resolution and
+  fail the affected course before any write or baseline advancement.
 
 Ambiguous candidates use `Needs Review = true` and `Readiness = Review`, appear
 first on the dashboard, and stay out of active views. Nas accepts by correcting
 facts and clearing Needs Review or rejects by setting Status to Dropped. The
-service revalidates an accepted candidate and returns unresolved conflicts to
-Review instead of guessing.
+service keys acceptance to the current evidence revision, applies accepted
+corrections before projection, and returns genuinely new unresolved conflicts
+to Review instead of guessing or clearing the correction.

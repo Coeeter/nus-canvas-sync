@@ -124,16 +124,24 @@ export const interpretCourse = Effect.fn("interpretCourse")(function* (
   const outputPath = path.join(directory, "output.json");
   yield* fs.writeFileString(schemaPath, schema, { mode: 0o600 });
   const prompt = buildCoursePrompt(input, instructions);
-  const allowed = new Set(
-    [...input.changedRecords, ...input.referencedDocuments].map((record) => record.id),
-  );
-
   return yield* Effect.gen(function* () {
     yield* executor.execute(prompt, schemaPath, outputPath, directory);
     const encoded = yield* fs.readFileString(outputPath);
     const raw = yield* Schema.decodeUnknownEffect(JsonValue)(encoded);
     return yield* Effect.try({
-      try: () => validateCandidates(raw, input.courseCode, allowed),
+      try: () =>
+        validateCandidates(
+          raw,
+          input.courseCode,
+          new Set(
+            [
+              ...input.changedRecords,
+              ...input.referencedDocuments,
+              ...(input.unchangedRecords ?? []),
+            ].map((record) => record.id),
+          ),
+          new Set((input.canonicalTasks ?? []).map((task) => task.id)),
+        ),
       catch: (cause) => cause,
     });
   }).pipe(

@@ -19,8 +19,45 @@ Review first.
 
 - Do not run the retired broad all-course agent workflow. Scheduled and manual
   automated reconciliation uses the same container command and outer run lock.
+- Runtime and fixture replay use the same deterministic course-planning boundary.
+  Per-course reconciliation state under the existing data volume persists
+  logical-task aliases, review resolutions, accepted field overrides, and the
+  last values actually written and verified. Missing fields are unknown; an
+  explicit source `null` is a removal proposal.
+- A candidate may link to a canonical task only through a validated current
+  inventory match or a source-anchored derived stage key. Shared announcements
+  and generic title/stage similarity are insufficient evidence for merging.
+- When a released lecture bundle's membership changes, reuse an active bundle
+  whose members contain the new projection and update that page in place.
+  Members from terminal bundles are excluded from later actionable bundles;
+  migration reports overlapping terminal/active bundles for review before any
+  archival proposal is applied.
 - Match imported actions idempotently by `Canvas Course ID` + `Canvas Item Type` + `Canvas Item ID`.
 - Preserve personal fields according to `planner-contract.md`.
+- Treat source overlap as evidence only: durable stage keys resolve identity.
+  Review fingerprints ignore added source aliases and mutable wording, while
+  changed disputed facts reopen Review. Stale terminal transitions fail closed;
+  already-terminal planned rows may receive safe identity/completion metadata.
+- Terminal `Done`/`Dropped` status dominates a newly discovered source conflict:
+  retain the conflicting date/history, but do not re-route the terminal row to
+  Review.
+- AI candidates must carry structured issue evidence and explicit date states;
+  legacy nullable caches migrate null to unknown. Persist raw source proposals
+  separately from user corrections and verified machine-write receipts so an
+  accepted correction remains stable across unchanged restarts.
+- Validate machine-owned candidate dates as calendar-valid ISO date-only values
+  or timezone-bearing ISO timestamps. Incomplete/raw date phrases remain null
+  or unknown with structured review evidence; malformed fresh output is
+  rejected/retried and malformed legacy cache values are migrated
+  conservatively.
+- Review issue fingerprints canonicalize the affected-field and disputed-value
+  sets, excluding source provenance; corroborating evidence does not reopen an
+  unchanged issue, while a different field or value does.
+- Apply current Notion terminal choices before computing dependencies. Reuse an
+  unambiguous active lecture bundle for both membership shrink and weekly
+  expansion; suppress unsafe create/merge behavior for split or ambiguous
+  overlaps, and fail the affected course before writes or baseline advancement
+  so uncovered work is explicit.
 - Separate release dates from due dates and preserve `During class` semantics.
 - On the first source absence, set `Source State` to `Missing` and `Missing Syncs` to 1. Archive only after a second consecutive confirmed absence. Restore an item if it returns.
 - Update course guidance when current official evidence changes how preparation, class activity, or submission works.
