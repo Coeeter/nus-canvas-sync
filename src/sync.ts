@@ -213,11 +213,12 @@ async function publish(
 }
 
 export function formatSyncTime(date: Date, timezone: string): string {
-  return `${new Intl.DateTimeFormat("en-SG", {
+  const formatted = new Intl.DateTimeFormat("en-SG", {
     dateStyle: "full",
     timeStyle: "short",
     timeZone: timezone,
-  }).format(date)} (${timezone})`;
+  }).format(date);
+  return `${formatted.replace(/\b(am|pm)\b/gi, (period) => period.toUpperCase())} (${timezone})`;
 }
 
 function notionClient(): NotionClient | null {
