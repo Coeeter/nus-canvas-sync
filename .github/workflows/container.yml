@@ -31,6 +31,9 @@ jobs:
   image:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -62,3 +65,9 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+      # Dokploy watches Git tags. Publish the tag only after GHCR has the image.
+      - name: Tag deployment
+        run: |
+          deploy_tag="deploy-${{ github.run_number }}.${{ github.run_attempt }}"
+          git tag "$deploy_tag"
+          git push origin "$deploy_tag"

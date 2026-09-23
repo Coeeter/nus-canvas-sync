@@ -1,8 +1,7 @@
 services:
   planner:
-    image: ${PLANNER_IMAGE:-nus-course-planner:latest}
-    build:
-      context: .
+    image: ghcr.io/coeeter/nus-canvas-sync:latest
+    pull_policy: always
     init: true
     restart: unless-stopped
     environment:

@@ -1,7 +1,10 @@
 # Dokploy Compose deployment
 
 Deploy `compose.yaml` as one Dokploy Compose service. SQLite is embedded in the
-planner process; there is no database server container.
+planner process; there is no database server container. The container workflow
+publishes `ghcr.io/coeeter/nus-canvas-sync:latest` and a Git `deploy-*` tag only
+after the image push succeeds. Configure Dokploy's Compose trigger to redeploy
+on those Git tags; Compose pulls the latest image on each redeploy.
 
 ## Persistent volumes
 
