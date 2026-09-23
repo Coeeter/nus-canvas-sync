@@ -1,0 +1,17 @@
+[
+  {
+    "pageId": "manual-page",
+    "values": {
+      "action": "Prepare IS1128 project proposal",
+      "course": "IS1128",
+      "status": "In progress",
+      "availability": "Blocked",
+      "weight": 10,
+      "startBy": "2026-09-01",
+      "due": "2026-09-20T15:59:00+08:00",
+      "source": "https://canvas.nus.edu.sg/courses/97325/assignments/274462",
+      "notes": "Waiting for teammates; preserve this note.",
+      "archived": false
+    }
+  }
+]

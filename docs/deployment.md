@@ -1,93 +1,54 @@
-# Dokploy deployment
+# Dokploy Compose deployment
 
-The production artifact is `ghcr.io/coeeter/nus-canvas-sync:latest`, published
-by `.github/workflows/container.yml` after the full test suite. Deploy the
-immutable `sha-<7 characters>` tag for rollback-safe releases. The image
-contains Bun 1.4.0, Canvas CLI 1.13.0, Codex CLI 0.150.1, GitHub CLI 2.98.0,
-and `pdftotext`. It contains no credentials and runs as UID 10001. It has no
-cron daemon.
+Deploy `compose.yaml` as one Dokploy Compose service. SQLite is embedded in the
+planner process; there is no database server container.
 
 ## Persistent volumes
 
-Mount:
+- `planner-data` mounts at `/data` and contains `planner.db`, the latest Canvas
+  corpus, run transcripts, audits, and pending publication state.
+- `planner-codex-home` mounts at `/codex-home` and contains Codex authentication.
+  Treat its `auth.json` as password-equivalent.
 
-- `/data` for immutable snapshots, per-course successful baselines, and the run lock;
-- `/codex-home` for the dedicated Codex login (`CODEX_HOME`). Treat its
-  `auth.json` as password-equivalent.
+Never recreate either named volume during a routine image update. Back up the
+complete existing Notion database before the initial schema cutover.
 
-Initialize Codex authentication once on the VPS without copying it into Git or
-an image. After Dokploy creates `nus-sync-codex`, use a temporary root-owned
-container to copy the already authenticated VPS `auth.json` into that volume,
-then make the copied file UID/GID 10001 with mode `0600`. Resolve and verify the
-exact Docker volume name first; never use a partial match. Do not print or
-inspect `auth.json`. Validate from the running Application only with
-`codex --version` and a harmless authenticated non-interactive invocation.
+## Runtime secrets
 
-## Doppler configuration
+Supply through the Dokploy Doppler vault provider: `CANVAS_URL`, `CANVAS_TOKEN`,
+`NOTION_TOKEN`, `NOTION_DATA_SOURCE_ID`, `RESEND_API_KEY`, `ALERT_EMAIL_FROM`,
+and `ALERT_EMAIL_TO`.
 
-Create project `nus-sync` and configuration `prod`. Set these runtime values:
+`CODEX_MODEL` defaults to `gpt-6-luna` and `CODEX_REASONING` defaults to
+`medium`; both can be overridden for the single reconciliation session. Do not
+place secret values in Compose source, build arguments, logs, or chat.
 
-- `CANVAS_URL`, `CANVAS_TOKEN` from the authenticated local Canvas CLI config;
-- `GH_TOKEN` from the authenticated GitHub CLI with read-only repository scope;
-- `NOTION_TOKEN` for the existing Actions data source;
-- `NOTION_DATA_SOURCE_ID=e04655de-e228-44cb-9042-597968f7057a`;
-- `RESEND_API_KEY`, copied internally from `aianiart-api` production;
-- `ALERT_EMAIL_FROM` using the verified Resend sender;
-- `ALERT_EMAIL_TO=nasrullah01n@gmail.com`;
-- optional `NOTION_DASHBOARD_URL` and `NOTION_HEALTH_BLOCK_ID` overrides.
+## Service and schedule
 
-Create one read-only Doppler service token for `nus-sync/prod` and configure it
-as a Dokploy Doppler vault provider named `nus-sync-prod`, scoped to the
-**personal** project. Reference the remote values from the Application environment;
-Dokploy resolves them at deployment time without storing their values:
+The container idles with `sleep infinity`. Configure the Dokploy scheduled
+command against the `planner` service:
 
 ```text
-CANVAS_URL=${{vault.nus-sync-prod.CANVAS_URL}}
-CANVAS_TOKEN=${{vault.nus-sync-prod.CANVAS_TOKEN}}
-GH_TOKEN=${{vault.nus-sync-prod.GH_TOKEN}}
-NOTION_TOKEN=${{vault.nus-sync-prod.NOTION_TOKEN}}
-NOTION_DATA_SOURCE_ID=${{vault.nus-sync-prod.NOTION_DATA_SOURCE_ID}}
-RESEND_API_KEY=${{vault.nus-sync-prod.RESEND_API_KEY}}
-ALERT_EMAIL_FROM=${{vault.nus-sync-prod.ALERT_EMAIL_FROM}}
-ALERT_EMAIL_TO=${{vault.nus-sync-prod.ALERT_EMAIL_TO}}
+bun run sync:publish
 ```
 
-Add the optional Notion overrides the same way when present. Never paste secret
-values into logs, build arguments, source files, Dokploy environment text, or chat.
-
-## Dokploy application and schedule
-
-Create a Dokploy **Application** under the **personal** project with the Docker
-provider. Select the existing private GHCR registry credential and set the image
-to the verified immutable
-`ghcr.io/coeeter/nus-canvas-sync:sha-<7 characters>` tag. Set the Application
-command to `sleep infinity`, add the vault-backed environment above, and mount
-the `nus-sync-data` volume at `/data` and the `nus-sync-codex` volume at
-`/codex-home`.
-
-Dokploy Application jobs use `docker exec`, so the idle Application container
-must remain running. Configure one Application schedule whose command is
-`bun run sync`; do not add Compose or an in-image cron daemon.
-
-Configure Dokploy in `Asia/Singapore` with exactly:
+Use timezone `Asia/Singapore` and cron schedule:
 
 ```text
 0 7,12,17,22 * * *
 ```
 
-This runs at 07:00, 12:00, 17:00, and 22:00. Do not add a 03:00 run.
+Before enabling publication or the schedule:
 
-## First run and verification
+1. Build and start the Compose service.
+2. Install authenticated Codex state in `planner-codex-home` with ownership
+   UID/GID 10001 and mode `0600` without printing it.
+3. Run `bun run healthcheck` inside the service.
+4. Run `bun run sync` to generate and inspect the live Notion migration diff.
+5. Obtain explicit authorization for difficult-to-reverse Notion property
+   removal.
+6. Run `bun run sync:publish`, refetch Notion, and verify SQLite agreement.
+7. Run it a second time and require an empty diff before enabling the schedule.
 
-1. Pull the immutable SHA tag produced by CI and run `bun run healthcheck`.
-2. Run `bun run collect` once and inspect the generated manifest. Every required
-   endpoint must be `ok` or a declared capability gap with successful alternates.
-3. Run `bun run sync` manually. Confirm concise `sync_finished` JSON, the five
-   per-course outcomes, Review-first behavior, and the dashboard health callout.
-4. Confirm `/data/baselines` contains five course files only after successful
-   verified reconciliation. A failed course must retain its earlier mtime.
-5. Enable the four Dokploy schedules only after that manual run succeeds.
-
-Rollback is to disable the Dokploy schedule and pin the previous working image
-SHA. The paused legacy automation stays paused unless Nas explicitly chooses to
-reactivate it; do not delete or reactivate it automatically.
+Rollback disables the schedule and pins the previous image. Preserve both
+volumes so pending publication and audit history remain available.

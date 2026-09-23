@@ -1,0 +1,33 @@
+services:
+  planner:
+    image: ${PLANNER_IMAGE:-nus-course-planner:latest}
+    build:
+      context: .
+    init: true
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      CODEX_HOME: /codex-home
+      TZ: Asia/Singapore
+      CANVAS_URL: ${CANVAS_URL}
+      CANVAS_TOKEN: ${CANVAS_TOKEN}
+      NOTION_TOKEN: ${NOTION_TOKEN}
+      NOTION_DATA_SOURCE_ID: ${NOTION_DATA_SOURCE_ID}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-nasrullah01n@gmail.com}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-6-luna}
+      CODEX_REASONING: ${CODEX_REASONING:-medium}
+    volumes:
+      - planner-data:/data
+      - planner-codex-home:/codex-home
+    healthcheck:
+      test: ["CMD", "bun", "run", "healthcheck"]
+      interval: 1m
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  planner-data:
+  planner-codex-home:

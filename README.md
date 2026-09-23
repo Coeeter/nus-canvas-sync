@@ -1,40 +1,40 @@
-# NUS Canvas Sync
+# NUS course planner
 
-A small, deterministic university task tracker for Nas. It collects normalized
-Canvas and CS2030S GitHub evidence, computes per-course semantic diffs, applies
-safe lifecycle rules, sends only changed prose to an isolated Codex process, and
-projects verified actions into the existing Notion Actions database.
+A small agent-driven Canvas-to-Notion planner. SQLite is canonical state, one
+Codex session reconciles every active course, and Notion is a human-facing
+projection.
 
-It does not mirror Canvas, create attendance todos, invent release dates, or let
-AI decide availability/completion. Ambiguous evidence goes to **Review first**.
+## Runtime flow
+
+1. Export the latest complete Canvas corpus.
+2. Import current Notion rows and highlight user changes.
+3. Give Codex full CRUD over an isolated SQLite copy.
+4. Validate and atomically promote the database.
+5. Diff, publish, and verify Notion.
+
+Canvas is strictly read-only. Codex never receives Notion credentials.
 
 ## Commands
 
+All production validation is container-based.
+
 ```sh
-bun install
-bun run collect       # source snapshot only
-bun run sync          # complete collection -> Notion -> baseline run
-bun run check         # typecheck, lint, and all tests
+docker build -t nus-course-planner .
+docker run --rm nus-course-planner bun run healthcheck
+docker run --rm --env-file .env -v nus-sync-data:/data -v nus-sync-codex:/codex-home \
+  nus-course-planner bun run sync
+
+# Deployment-equivalent service with persistent SQLite and Codex volumes
+docker compose up -d
+docker compose exec planner bun run sync
 ```
 
-`./sync.sh` remains the compatibility wrapper for source-only collection.
+`bun run sync` stops after producing `/data/runs/<run>/notion-diff.json`.
+`bun run sync:publish` applies and verifies that diff once the live Notion
+schema migration is authorized.
+`bun run notion:schema` reads the live schema and prints required additions,
+removals, and type corrections without changing Notion.
 
-The complete sync requires `CANVAS_URL`, `CANVAS_TOKEN`, `GH_TOKEN`,
-`NOTION_TOKEN`, `RESEND_API_KEY`, and `ALERT_EMAIL_FROM`. `ALERT_EMAIL_TO`
-defaults to `nasrullah01n@gmail.com`; `DATA_DIR` defaults to `/data` in the
-container. Secrets must be injected at runtime, preferably by the Doppler
-vault provider described in [deployment.md](docs/deployment.md).
-
-## Runtime behavior
-
-- Course baselines advance independently only after verified Notion writes.
-- A timetable/cadence can create Expected context but never an active quiz.
-- GEA1000/GESS1001 e-lectures are work; IS1128/CS2030S/MA1301 lecture attendance is not.
-- Physical labs/tutorials/recitations are not todos; real preparation expires after its event.
-- Manual Notion rows without a Canvas Item ID remain fully user-owned.
-- Real failures update the dashboard, retain failed baselines, exit nonzero, and
-  send one idempotent Resend email.
-
-See [docs/context.md](docs/context.md), the approved
-[specification](docs/task-tracker/spec.md), and the
-[deployment runbook](docs/deployment.md).
+See [the shared planner guide](docs/planner-guide.md),
+[local sync-agent instructions](docs/sync-agent.md), and the
+[approved specification](docs/agent-sync/spec.md).

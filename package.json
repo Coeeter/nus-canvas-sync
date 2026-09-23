@@ -4,34 +4,20 @@
   "type": "module",
   "scripts": {
     "check": "bun run typecheck && bun run lint && bun test",
-    "collect": "bun run src/cli/collect.ts",
-    "fixture:replay": "bun run src/cli/fixture-replay.ts",
+    "collect": "bun run src/cli.ts collect",
     "format": "biome format --write .",
-    "healthcheck": "bun run src/cli/healthcheck.ts",
-    "incident:replay": "bun run src/cli/incident-replay.ts",
+    "healthcheck": "bun run src/cli.ts healthcheck",
     "lint": "biome check .",
-    "migration:dry-run": "bun run src/cli/migration-dry-run.ts",
-    "sync": "bun run src/cli/sync.ts",
+    "notion:export": "bun run src/cli.ts notion-export",
+    "notion:schema": "bun run src/cli.ts notion-schema",
+    "sync": "bun run src/cli.ts sync",
+    "sync:publish": "bun run src/cli.ts sync --publish",
     "test": "bun test",
-    "test:ai": "bun test tests/ai",
-    "test:alerts": "bun test tests/alerts",
-    "test:collector": "bun test tests/collector",
-    "test:container": "bun test tests/container",
-    "test:diff": "bun test tests/diff",
-    "test:incidents": "bun test tests/rules tests/projector",
-    "test:notion": "bun test tests/notion tests/reconcile",
-    "test:reconcile": "bun test tests/reconcile",
-    "test:rules": "bun test tests/rules tests/projector",
-    "test:run": "bun test tests/run",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@effect/platform-bun": "^4.0.0-rc.112",
-    "effect": "^4.0.0-rc.112"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
-    "@effect/language-service": "latest",
     "@types/bun": "latest",
     "typescript": "^7.0.2"
   }

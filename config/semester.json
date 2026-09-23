@@ -1,0 +1,83 @@
+{
+  "term": "AY2026-27 Semester 1",
+  "timezone": "Asia/Singapore",
+  "dashboard": {
+    "pageId": "3bd703fb-987d-81f4-a438-c7d430b7c38f",
+    "syncStatusBlockId": "8255ad19-0061-41b3-9dc7-5c22f0bc5c4e"
+  },
+  "startDate": "2026-08-10",
+  "endDate": "2026-12-06",
+  "courses": [
+    {
+      "code": "CS2030S",
+      "name": "Programming Methodology II",
+      "canvasId": 93698,
+      "delivery": "mixed",
+      "structure": [
+        "Canvas Home is a week-by-week timeline with links to diagnostics, problem sets, quiz/midterm/PE administration and the final. Check Announcements for changes and Assignments for official assessment details.",
+        "Canvas Pages contains course policy; Files contains problem sets and practice papers. The course's public units site provides teaching units, while Classroom50/GitHub are used for programming exercises and actual submission. A Canvas exercise page may say unsubmitted even when the work was submitted elsewhere.",
+        "Sit-in labs are physical calendar events, not planner actions; a concrete kit/preparation task may be actionable."
+      ]
+    },
+    {
+      "code": "GEA1000",
+      "name": "Quantitative Reasoning with Data",
+      "canvasId": 94257,
+      "delivery": "flipped",
+      "structure": [
+        "Canvas Home explains the blended format. Modules > ABOUT THE COURSE holds the teaching schedule; weekly Modules link lecture videos, tutorial material, quizzes and project information.",
+        "Files holds the group-project and video-assignment briefs and tutorial sheets. Announcements may point to newly released materials. Quizzes and Assignments provide official assessment state and deadlines.",
+        "Lecture videos are self-paced work; odd-week face-to-face tutorials require advance problem attempts, but attendance itself is calendar context."
+      ]
+    },
+    {
+      "code": "GESS1001",
+      "name": "Changing Landscapes of Singapore",
+      "canvasId": 94548,
+      "delivery": "mixed",
+      "structure": [
+        "Canvas Home opens Modules. The Welcome module's Syllabus, Assessment Components & Due Dates page is the primary assessment overview. Assignments and Group Project Forms modules contain the actual briefs and forms; weekly modules hold lecture content and release gates.",
+        "There is no visible Files or Pages tab. Course-wide Files/Pages list APIs can fail, but individual Module-linked Page slugs and File IDs are readable; follow those links. Announcements carry changes such as final-test rules.",
+        "Week 7 and later module content can be locked until its release date. Odd-week tutorials are physical; released self-paced lecture content and concrete preparation may be actionable."
+      ]
+    },
+    {
+      "code": "IS1128",
+      "name": "IT, Management and Organisation",
+      "canvasId": 97325,
+      "delivery": "physical",
+      "structure": [
+        "Canvas Home contains the assessment weights and a tentative week-by-week lesson/quiz plan. The syllabus and project specification are linked there and in Files; the project has separate proposal, presentation and report stages.",
+        "Use Quizzes and Assignments to confirm actual release and deadlines; a Home schedule alone is not proof a future quiz is open. Announcements often clarify active quiz and project dates. Syllabus and Pages are also available.",
+        "Lectures are physical calendar events; required preparation and project stages are actions."
+      ]
+    },
+    {
+      "code": "MA1301",
+      "name": "Introductory Mathematics",
+      "canvasId": 97359,
+      "delivery": "blended",
+      "structure": [
+        "Canvas Home gives assessment weights, midterm/final times and links to Course Schedule and weekly Pages. Weekly Pages and Files hold the session plan, lecture notes, recorded-preparation links and quiz sheets.",
+        "Announcements and Discussions can override the older schedule; the 22 September midterm announcement narrows coverage beyond the schedule. Use current announcements for corrections.",
+        "Watch assigned recordings before physical classes. In-class pen-and-paper quizzes are physical events, not separate outside-work todos; preparation may be actionable."
+      ]
+    }
+  ],
+  "timetable": [
+    "Monday 10:00-12:00 MA1301 lecture",
+    "Monday 12:00-14:00 CS2030S lecture",
+    "Odd-week Monday 16:00-18:00 GESS1001 tutorial",
+    "Odd-week Wednesday 09:00-12:00 GEA1000 tutorial",
+    "Wednesday 14:00-15:00 CS2030S recitation",
+    "Thursday 10:00-12:00 IS1128 lecture",
+    "Thursday 14:00-16:00 GESS1001 lecture release/session",
+    "Thursday 16:00-18:00 CS2030S lab",
+    "Friday 10:00-12:00 MA1301 lecture"
+  ],
+  "notes": [
+    "GEA1000 and GESS1001 released self-paced lectures are actionable.",
+    "Physical classes are calendar context; concrete preparation is actionable.",
+    "GESS1001 and GEA1000 tutorials use the odd-week timetable."
+  ]
+}
