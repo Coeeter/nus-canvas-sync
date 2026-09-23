@@ -15,7 +15,7 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM}
       ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-nasrullah01n@gmail.com}
-      CODEX_MODEL: ${CODEX_MODEL:-gpt-6-luna}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-6-luna,gpt-5.6-luna}
       CODEX_REASONING: ${CODEX_REASONING:-medium}
     volumes:
       - planner-data:/data

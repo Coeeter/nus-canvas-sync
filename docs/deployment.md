@@ -22,9 +22,12 @@ Supply through the Dokploy Doppler vault provider: `CANVAS_URL`, `CANVAS_TOKEN`,
 `NOTION_TOKEN`, `NOTION_DATA_SOURCE_ID`, `RESEND_API_KEY`, `ALERT_EMAIL_FROM`,
 and `ALERT_EMAIL_TO`.
 
-`CODEX_MODEL` defaults to `gpt-6-luna` and `CODEX_REASONING` defaults to
-`medium`; both can be overridden for the single reconciliation session. Do not
-place secret values in Compose source, build arguments, logs, or chat.
+`CODEX_MODEL` is a comma-separated preference list, defaulting to
+`gpt-6-luna,gpt-5.6-luna`. Each sync uses the first model the Codex account
+accepts; a model the ChatGPT plan rejects is logged as `codex_model_unsupported`
+and the next is tried. `CODEX_REASONING` defaults to `medium`; workspaces with
+managed Codex requirements may ignore it. Do not place secret values in Compose
+source, build arguments, logs, or chat.
 
 ## Service and schedule
 

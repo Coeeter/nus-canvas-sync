@@ -35,46 +35,63 @@ export async function reconcileWithCodex(input: {
   ].join("\n");
 
   let lastError = "";
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const args = [
-      "exec",
-      "--ephemeral",
-      "--ignore-user-config",
-      "--skip-git-repo-check",
-      // The agent already runs as an unprivileged user inside the planner container.
-      // Nested Linux namespaces are unavailable on ordinary Docker/Dokploy hosts.
-      "--dangerously-bypass-approvals-and-sandbox",
-      "--json",
-      "--output-last-message",
-      lastMessage,
-    ];
-    if (process.env.CODEX_MODEL) args.push("--model", process.env.CODEX_MODEL);
-    if (process.env.CODEX_REASONING)
-      args.push("-c", `model_reasoning_effort="${process.env.CODEX_REASONING}"`);
-    args.push("--cd", input.workspace, "-");
-    const child = Bun.spawn(["codex", ...args], {
-      cwd: input.workspace,
-      env: {
-        ...stringEnv(),
-        PLANNER_DB: input.database,
-        PLANNER_RUN_ID: input.runId,
-        CANVAS_CORPUS: input.corpus,
-      },
-      stdin: new Blob([prompt]),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-      child.exited,
-    ]);
-    await Bun.write(transcript, `${await safeExistingText(transcript)}${stdout}`);
-    if (exitCode === 0) return transcript;
-    lastError = redact(stderr.trim() || transcriptFailure(stdout));
-    if (lastError.includes('"status":400') || lastError.includes("invalid_request_error")) break;
+  for (const model of codexModels(process.env.CODEX_MODEL)) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const args = [
+        "exec",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--skip-git-repo-check",
+        // The agent already runs as an unprivileged user inside the planner container.
+        // Nested Linux namespaces are unavailable on ordinary Docker/Dokploy hosts.
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--json",
+        "--output-last-message",
+        lastMessage,
+      ];
+      if (model) args.push("--model", model);
+      if (process.env.CODEX_REASONING)
+        args.push("-c", `model_reasoning_effort="${process.env.CODEX_REASONING}"`);
+      args.push("--cd", input.workspace, "-");
+      const child = Bun.spawn(["codex", ...args], {
+        cwd: input.workspace,
+        env: {
+          ...stringEnv(),
+          PLANNER_DB: input.database,
+          PLANNER_RUN_ID: input.runId,
+          CANVAS_CORPUS: input.corpus,
+        },
+        stdin: new Blob([prompt]),
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      await Bun.write(transcript, `${await safeExistingText(transcript)}${stdout}`);
+      if (exitCode === 0) return transcript;
+      lastError = redact(stderr.trim() || transcriptFailure(stdout));
+      if (lastError.includes('"status":400') || lastError.includes("invalid_request_error")) break;
+    }
+    if (!isUnsupportedModel(lastError)) break;
+    console.log(JSON.stringify({ event: "codex_model_unsupported", model }));
   }
-  throw new Error(`Codex reconciliation failed twice: ${lastError}`);
+  throw new Error(`Codex reconciliation failed: ${lastError}`);
+}
+
+export function codexModels(setting: string | undefined): Array<string | undefined> {
+  const models = (setting ?? "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+  return models.length > 0 ? models : [undefined];
+}
+
+// ChatGPT-account Codex rejects models the plan lacks with this 400, before doing any work.
+export function isUnsupportedModel(error: string): boolean {
+  return /model is not supported/i.test(error);
 }
 
 export function transcriptFailure(output: string): string {
