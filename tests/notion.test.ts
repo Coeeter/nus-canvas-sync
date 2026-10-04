@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { planNotionDiff, planNotionSchema } from "../src/notion";
+import { actionValues, planNotionDiff, planNotionSchema } from "../src/notion";
 import type { Action } from "../src/types";
 
 const action: Action = {
@@ -66,6 +66,48 @@ test("Notion date-time formatting does not cause repeat writes", () => {
   expect(planNotionDiff([dated], [row])).toEqual([]);
   expect(planNotionDiff([{ ...dated, due: "2026-11-05T08:00:00Z" }], [row])).toEqual([]);
   expect(planNotionDiff([{ ...dated, due: "2026-11-05" }], [row])).toHaveLength(1);
+});
+
+test("Notion minute precision does not leave four deadline updates pending", () => {
+  const dates = ["2026-10-11", "2026-11-01", "2026-11-15", "2026-11-19"];
+  const actions = dates.map((date, index) => ({
+    ...action,
+    id: `action-${index}`,
+    notionPageId: `page-${index}`,
+    startBy: `${date}T09:00:30+08:00`,
+    due: `${date}T23:59:59+08:00`,
+  }));
+  const rows = actions.map((item, index) => ({
+    pageId: item.notionPageId,
+    values: {
+      ...actionValues(item),
+      startBy: `${dates[index]}T01:00:00.000Z`,
+      due: `${dates[index]}T15:59:00.000Z`,
+    },
+  }));
+
+  expect(planNotionDiff(actions, rows)).toEqual([]);
+  expect(actions[0]?.due).toBe("2026-10-11T23:59:59+08:00");
+});
+
+test("Notion minute precision still detects different minutes and date-only values", () => {
+  const dated = {
+    ...action,
+    startBy: "2026-10-11T09:00:30+08:00",
+    due: "2026-10-11T23:59:59+08:00",
+  };
+  const row = { pageId: "p", values: actionValues(dated) };
+
+  for (const change of [
+    { due: "2026-10-12T00:00:00+08:00" },
+    { startBy: "2026-10-11T09:01:00+08:00" },
+    { due: "2026-10-11" },
+    { startBy: null },
+  ]) {
+    expect(
+      planNotionDiff([dated], [{ ...row, values: { ...row.values, ...change } }]),
+    ).toHaveLength(1);
+  }
 });
 
 test("changed availability updates the existing row rather than creating review copy", () => {

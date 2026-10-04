@@ -15,7 +15,7 @@ export async function sendFailureAlert(runId: string, error: unknown): Promise<v
       from,
       to: [to],
       subject: `NUS planner sync failed (${runId})`,
-      text: `The planner sync exhausted its retries.\n\nRun: ${runId}\nError: ${detail.slice(0, 1500)}\n\nSQLite state and pending publication were preserved.`,
+      text: `The planner sync failed.\n\nRun: ${runId}\nError: ${detail.slice(0, 1500)}\n\nSQLite state and pending publication were preserved.`,
     }),
   });
   if (!response.ok) throw new Error(`Resend alert failed (${response.status})`);

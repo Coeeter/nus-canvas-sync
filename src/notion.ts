@@ -224,7 +224,11 @@ function sameValues(actual: ActionValues | undefined, expected: ActionValues): b
     if (left === right) return true;
     if (!left || !right) return false;
     if (/^\d{4}-\d{2}-\d{2}$/.test(left) || /^\d{4}-\d{2}-\d{2}$/.test(right)) return false;
-    return new Date(left).getTime() === new Date(right).getTime();
+    // Notion returns date-times at minute precision; SQLite keeps the exact deadline.
+    return (
+      Math.floor(new Date(left).getTime() / 60_000) ===
+      Math.floor(new Date(right).getTime() / 60_000)
+    );
   };
   return (
     actual.action === expected.action &&
